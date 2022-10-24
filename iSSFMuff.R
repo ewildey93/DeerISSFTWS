@@ -59,19 +59,18 @@ readRDS("./DeerList2.rds")
 #uneven no. of observations per animal not a problem in Muff et al. 2020 example
 #################################################################################
 # We can format our data as a 'track_*' object using 'make_track()'.
-trk <- make_track(Deer2, X, Y, DateTime, id = ID, crs = CRS("+init=EPSG:32613"))
-trkA <- trk %>% group_by(id)%>%nest()
+trkList <- lapply(Deer2, function (x) make_track(x, X, Y, DateTime, id = ID, crs = CRS("+init=EPSG:32613")))
+#trkA <- trk %>% group_by(id)%>%nest()
 
 #don't need to break into behavioral states using HMM because of coarse interval
 # We can do that with the function 'steps()'.
-trk1 <- trk %>% nest(-'id')
-trk2 <- trk1 %>% 
-  mutate(steps = lapply(data, function(x) 
-    x %>% track_resample(rate = hours(4), 
+#trk1 <- trk %>% nest(-'id')
+trk1 <- lapply(trkList, function (x) track_resample(x,rate=hours(4), tolerance=minutes(36)))
           #tolerance recommended to be less than 20% of interval https://github.com/ewildey93/Statistical-Methods-Seminar-Series/blob/main/avgar-smith_issa/Q_and_A.md
-          tolerance = minutes(24)) %>% steps_by_burst(keep_cols='start')))
-trk2df <- trk2%>%select(id, steps)%>%unnest(cols=steps)
-trk3 <- lapply(trk2, function (x)filter_min_n_burst(min_n=3))
+trk2 <- lapply(trk1, function (x)filter_min_n_burst(x,min_n=3))         
+steps <- lapply(trk2, function (x) steps_by_burst(x))
+saveRDS(steps, "./DeerSteps.rds")
+
 ####################scrap############################
 o <- read.csv("C:/Users/eliwi/Downloads/d_otter.csv")
 table(o$NA_ANIMAL)
