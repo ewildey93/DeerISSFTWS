@@ -11,6 +11,7 @@ library(ggplot2)
 library(tidyverse)
 library(data.table)
 library(amt)
+library(zoo)
 setwd("C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS")
 
 filenames <- list.files(path = "C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS/Data",pattern = ".csv",full.names = TRUE)
@@ -71,10 +72,75 @@ trk2 <- lapply(trk1, function (x)filter_min_n_burst(x,min_n=3))
 steps <- lapply(trk2, function (x) steps_by_burst(x))
 saveRDS(steps, "./DeerSteps.rds")
 
+max <- max(sapply(steps, function(x) as.character(max(x$t2_, na.rm=TRUE))))
+min <- min(sapply(steps, function(x) as.character(min(x$t2_, na.rm=TRUE))))
+min <- as.POSIXct(min,format= '%Y-%m-%d %H:%M:%S', tz="America/Denver")
+max <- as.POSIXct(max,format= '%Y-%m-%d %H:%M:%S', tz="America/Denver")
+min <- min-5*60*60
+max <- max
+min <- as.POSIXct(format(round(min, units="hours"), format="%Y-%m-%d %H:%M"),tz="America/Denver")
+max <- as.POSIXct(format(round(max, units="hours"), format="%Y-%m-%d %H:%M"),tz="America/Denver")
+#min <- "2021-04-05 17:00:00 MDT"
+#max <- "2022-10-09 11:00:00 MDT"
+
+#####################################################################################
+#####################################################################################
+# Step 1. Sample ----
+RndSteps <- lapply(steps, function (x) random_steps(x, n_control = 20))
+
+# Since we used the gamma distribution as our tentative step-length
+# distribution, we need to include step length and log(step length)
+# in our iSSF. We already have a column, 'sl_', but we need to add 
+# 'log_sl_'. Likewise, we need the cosine of the turn angle to update
+# the von Mises distribution, so we need to add cos_ta_:
+RndSteps <- lapply(RndSteps, function (x) {
+  mutate(x,
+         log_sl_ = log(x$sl_),
+         cos_ta_ = cos(x$ta_))})
+saveRDS(RndSteps, "./DeerRndSteps.rds")
+#########################################################################
+# Step 2. Attribute ---                                                 #
+#########################################################################
+#Rnd Steps to sf object:
+RndStepsSF <- lapply(RndSteps, function (x) st_as_sf(x, coords= c("x2_","y2_"), crs=CRS("+init=epsg:32613")))
+
+#Trails:
+Trails <- readOGR(dsn='C:/Users/eliwi/OneDrive/Documents/Salida/GeospatialLayers', layer='DissolvedTrails')
+TrailsSF <- st_as_sf(Trails)
+
+
+#get distance to trail for all points
+Dist2Trail <- lapply(RndStepsSF, y=TrailsSF, function (x, y)st_distance(x, y))
+Dist2TrailDF <- lapply(Dist2Trail, as.numeric)
+Dist2TrailDF <- lapply(Dist2Trail, function (x) as.data.frame(x, col.names="Dist2Trail"))
+
+RndSteps2 <- mapply(cbind, RndSteps, Dist2TrailDF, SIMPLIFY=FALSE)
+saveRDS(RndSteps2, "./RndSteps2.rds")
+
+#Traffic volume-daily
+LRTrail <- read.csv("./CoVs/Little Rainbow Trail RAW.csv", header=FALSE)
+SpartanTH <- read.csv("./CoVs/Spartan T.H. Parking Lot RAW.csv", header=FALSE)
+colnames(LRTrail)[1:2] <- c("DateTime", "V1")
+colnames(SpartanTH)[1:2] <- c("DateTime", "V2")
+TrailActList <- list(LRTrail, SpartanTH)
+TrailActList <- lapply(TrailActList, function (x) {x$DateTime <- as.POSIXct(x$DateTime,format= '%Y-%m-%d %H:%M:%S', tz="America/Denver");x})
+TrailActList <- lapply(TrailActList, function (x) filter(x,DateTime > min & DateTime < max))
+TrailActdf <- merge(TrailActList[[1]], TrailActList[[2]], by="DateTime", all=TRUE)
+TrailActdf$Total <- TrailActdf$V1 + TrailActdf$V2
+TrailActdf$RA <- rollmean(TrailActdf$Total, 4, fill=NA, align="right")
+RA <- TrailActdf[,c(1,4,5)]
+colnames(RA)[1] <- "RoundDate"
+#extract time covariates
+RndSteps3 <- lapply(RndSteps2, function (x) mutate (x, RoundDate= as.POSIXct(format(round(t2_, units="hours"), format="%Y-%m-%d %H:%M:%S"),tz="America/Denver")))
+RndSteps3 <- lapply(RndSteps3, function (x) left_join(x,RA, by="RoundDate", all.y=F, all.x=T))
+saveRDS(RndSteps3, "./RndSteps3.rds")
 ####################scrap############################
 o <- read.csv("C:/Users/eliwi/Downloads/d_otter.csv")
-table(o$NA_ANIMAL)
+table(o$Loc)
 table(is.na(trk2df$ta_))
 F49862out <- Deer2[c(1253:1595,1762),]
 attr(F49862out$DateTime, "tzone") <- "America/Denver"
 Out <- Deer[["F49862"]][(Deer[["F49862"]]$DateTime %in% F49862out$DateTime),]
+
+z <- RndStepsSF[["F46538"]][1:40,]
+st_distance(z, TrailsSF)
