@@ -98,12 +98,16 @@ RndSteps <- lapply(RndSteps, function (x) {
          log_sl_ = log(x$sl_),
          cos_ta_ = cos(x$ta_))})
 saveRDS(RndSteps, "./DeerRndSteps.rds")
+write.csv(rbindlist(RndSteps), "./RndStepsdf.csv")
 #########################################################################
 # Step 2. Attribute ---                                                 #
 #########################################################################
+#TOD
+RndSteps <- lapply(RndSteps, function (x)time_of_day(x, where = "end",include.crepuscule=TRUE))
+
 #Rnd Steps to sf object:
 RndStepsSF <- lapply(RndSteps, function (x) st_as_sf(x, coords= c("x2_","y2_"), crs=CRS("+init=epsg:32613")))
-
+saveRDS(RndStepsSF, "./RndStepsSF.rds")
 #Trails:
 Trails <- readOGR(dsn='C:/Users/eliwi/OneDrive/Documents/Salida/GeospatialLayers', layer='DissolvedTrails')
 TrailsSF <- st_as_sf(Trails)
@@ -134,6 +138,26 @@ colnames(RA)[1] <- "RoundDate"
 RndSteps3 <- lapply(RndSteps2, function (x) mutate (x, RoundDate= as.POSIXct(format(round(t2_, units="hours"), format="%Y-%m-%d %H:%M:%S"),tz="America/Denver")))
 RndSteps3 <- lapply(RndSteps3, function (x) left_join(x,RA, by="RoundDate", all.y=F, all.x=T))
 saveRDS(RndSteps3, "./RndSteps3.rds")
+
+#landcover
+lc <- raster("./CoVs/NLCD_2019_Land_Cover_L48_20210604_JbsuwO6GkIW9V4xHbi6d.tiff")
+projection(lc)
+RndSteps4 <- rbindlist(RndSteps3, idcol=T)
+RndSteps4SF<-st_as_sf(RndSteps4, coords=c("x2_", "y2_"), crs=CRS("+init=epsg:32613"))
+RndSteps4SF<-st_transform(RndSteps4SF, projection(lc))
+RndSteps4$lc<-raster::extract(lc, RndSteps4SF)
+table(RndSteps4$lc)
+RndSteps4$developed<-ifelse(RndSteps4$lc %in% c(21,22,23,24), 1, 0) #This is call dummy code 
+RndSteps4$forest<-ifelse(RndSteps4$lc %in% c(41,42), 1, 0)
+RndSteps4$shrub<-ifelse(RndSteps4$lc %in% c(52), 1, 0)
+RndSteps4$herb <- ifelse(RndSteps4$lc %in% c(71,81,82), 1, 0)
+RndSteps4$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)
+table(is.na(RndSteps4$lc))
+saveRDS(RndSteps4, "./RndSteps4.rds")
+
+#TOD recode
+RndSteps4$tod_end_ <- recode_factor(RndSteps4$tod_end_,dusk = 'crepuscular',dawn='crepuscular')
+saveRDS(RndSteps4, "./RndSteps4.rds")
 ####################scrap############################
 o <- read.csv("C:/Users/eliwi/Downloads/d_otter.csv")
 table(o$Loc)
