@@ -12,6 +12,7 @@ library(tidyverse)
 library(data.table)
 library(amt)
 library(zoo)
+library(INLA)
 setwd("C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS")
 
 filenames <- list.files(path = "C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS/Data",pattern = ".csv",full.names = TRUE)
@@ -117,8 +118,13 @@ TrailsSF <- st_as_sf(Trails)
 Dist2Trail <- lapply(RndStepsSF, y=TrailsSF, function (x, y)st_distance(x, y))
 Dist2TrailDF <- lapply(Dist2Trail, as.numeric)
 Dist2TrailDF <- lapply(Dist2Trail, function (x) as.data.frame(x, col.names="Dist2Trail"))
+#D2TList <- lapply(Dist2TrailDF, setNames, "Dist2Trail") 
+#D2TList <- rbindlist(D2TList,idcol = TRUE)
 
-RndSteps2 <- mapply(cbind, RndSteps, Dist2TrailDF, SIMPLIFY=FALSE)
+#RndStepsA <- Map(bind_cols, RndSteps, ID = names(Deer))
+#use tidyverse functions isntead of base R to rpeserve as class "steps"
+RndSteps2 <- mapply(bind_cols, RndSteps, Dist2TrailDF, SIMPLIFY=FALSE)
+#RndSteps2B <- lapply(RndSteps, function (x) left_join(x,D2TList, by=c(''=".id"), all=T))
 saveRDS(RndSteps2, "./RndSteps2.rds")
 
 #Traffic volume-daily
@@ -142,7 +148,7 @@ saveRDS(RndSteps3, "./RndSteps3.rds")
 #landcover
 lc <- raster("./CoVs/NLCD_2019_Land_Cover_L48_20210604_JbsuwO6GkIW9V4xHbi6d.tiff")
 projection(lc)
-RndSteps4 <- rbindlist(RndSteps3, idcol=T)
+RndSteps4 <- bind_rows(RndSteps3, .id="column_label")
 RndSteps4SF<-st_as_sf(RndSteps4, coords=c("x2_", "y2_"), crs=CRS("+init=epsg:32613"))
 RndSteps4SF<-st_transform(RndSteps4SF, projection(lc))
 RndSteps4$lc<-raster::extract(lc, RndSteps4SF)
@@ -158,6 +164,48 @@ saveRDS(RndSteps4, "./RndSteps4.rds")
 #TOD recode
 RndSteps4$tod_end_ <- recode_factor(RndSteps4$tod_end_,dusk = 'crepuscular',dawn='crepuscular')
 saveRDS(RndSteps4, "./RndSteps4.rds")
+
+#TRI
+TRI <- raster("C:/Users/eliwi/OneDrive/Documents/Salida/GeospatialLayers/TRI10.26.tif")
+RndSteps4$TRI<-raster::extract(TRI, RndSteps4SF)
+saveRDS(RndSteps4, "./RndSteps4.rds")
+
+#make combo categories
+RndSteps4 <- RndSteps4%>%
+  mutate(forest_day = as.numeric(forest == 1 & TOD == "day"),
+         forest_night = as.numeric(forest == 1 & TOD == "night"),
+         forest_cre = as.numeric(forest == 1 & TOD == "crepuscular"),
+         shrub_day = as.numeric(shrub == 1 & TOD == "day"),
+         shrub_night = as.numeric(shrub == 1 & TOD == "night"),
+         shrub_cre = as.numeric(shrub == 1 & TOD == "crepuscular"),
+         herb_day = as.numeric(herb == 1 & TOD == "day"),
+         herb_night = as.numeric(herb == 1 & TOD == "night"),
+         herb_cre = as.numeric(herb == 1 & TOD == "crepuscular"))
+RndSteps4 <- RndSteps4%>%
+  mutate(TRI_day = as.numeric(forest == 1 & TOD == "day"),
+         TRI_night = as.numeric(forest == 1 & TOD == "night"),
+         TRI_cre = as.numeric(forest == 1 & TOD == "crepuscular"),
+         shrub_day = as.numeric(shrub == 1 & TOD == "day"),
+         shrub_night = as.numeric(shrub == 1 & TOD == "night"),
+         shrub_cre = as.numeric(shrub == 1 & TOD == "crepuscular"),
+         herb_day = as.numeric(herb == 1 & TOD == "day"),
+         herb_night = as.numeric(herb == 1 & TOD == "night"),
+         herb_cre = as.numeric(herb == 1 & TOD == "crepuscular"))
+
+###########################################################################
+####                           Modelling              #####################
+###########################################################################
+#' Set mean and precision for the priors of slope coefficients
+mean.beta <- 0
+prec.beta <- 1e-4 
+
+#To fit the model with random slopes in INLA, we need to generate new (but identical) variables of individual ID (ID cannot be used multiple times in the model formula):
+dat$ANIMAL_ID1 <- dat$ANIMAL_ID
+dat$ANIMAL_ID2 <- dat$ANIMAL_ID
+dat$ANIMAL_ID3 <- dat$ANIMAL_ID
+
+
+
 ####################scrap############################
 o <- read.csv("C:/Users/eliwi/Downloads/d_otter.csv")
 table(o$Loc)
