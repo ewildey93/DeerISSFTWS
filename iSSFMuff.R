@@ -184,9 +184,9 @@ RndSteps4 <- RndSteps4%>%
          herb_night = as.numeric(herb == 1 & TOD == "night"),
          herb_cre = as.numeric(herb == 1 & TOD == "crepuscular"))
 RndSteps4 <- RndSteps4%>%
-  mutate(TRI_day = as.numeric(forest == 1 & TOD == "day"),
-         TRI_night = as.numeric(forest == 1 & TOD == "night"),
-         TRI_cre = as.numeric(forest == 1 & TOD == "crepuscular"))
+  mutate(         develop_day = as.numeric(developed == 1 & TOD == "day"),
+                  develop_night = as.numeric(developed == 1 & TOD == "night"),
+                  develop_cre = as.numeric(developed == 1 & TOD == "crepuscular"))
 
 RndSteps4 <- RndSteps4%>%
   mutate(Stratam=as.factor(paste(column_label, burst_)))
@@ -196,6 +196,14 @@ RndSteps4$Stratum <- as.factor(RndSteps4$Stratum)
 class(RndSteps4)
 saveRDS(RndSteps4, "./RndSteps4.rds")
 
+#add variable for daily traffic
+Daily <- read.csv("./CoVs/TRAFx Daily totals (2021-03-31 to 2022-08-14).csv")
+Daily$Daily <- Daily$Little.Rainbow.Trail + Daily$Spartan.T.H..Parking.Lot
+Daily2 <- Daily[,c(1,4)]
+colnames(Daily2)[1] <- "Date"
+Daily2$Date <- as.Date(Daily2$Date)
+RndSteps4 <- mutate(RndSteps4, Date= as.Date(RndSteps4$t2_))
+RndSteps4 <- left_join(x = RndSteps4, y=Daily2, by="Date", all.x=T)
 #correlation test
 library(corrplot)
 CoVs <- RndSteps4[,c(18,21,28)]
@@ -208,18 +216,25 @@ cor(CoVs$x,CoVs$RA)
 cor(CoVs$RA,CoVs$TRI)
 
 #remove data without traffic volume
+
 RndSteps5 <- RndSteps4[-(9787:10122),]
 class(RndSteps5)
 table(is.na(RndSteps5$RA))
+
+
 #scale continous variables
-hist(RndSteps5$cos_ta_)
-hist(RndSteps5$ta_)
+hist(RndSteps4$cos_ta_)
+hist(RndSteps4$ta_)
 hist(RndSteps5$log_sl_)
 hist(RndSteps5$x)
 hist(RndSteps5$RA)
+RndSteps5 <- RndSteps5 %>% 
+  mutate(sl_ = replace(sl_, sl_==0, 1))
+RndSteps5 <- mutate(RndSteps5, log_sl_= log(sl_))
 RndSteps5$sl_ <- scale(RndSteps5$sl_)
 RndSteps5$RA <- scale(RndSteps5$RA)
 RndSteps5$x <- scale(RndSteps5$x)
+RndSteps5$log_sl_ <- scale(RndSteps5$log_sl_)
 saveRDS(RndSteps5, "./RndSteps5.rds")
 ###########################################################################
 ####                           Modelling              #####################
@@ -230,7 +245,7 @@ prec.beta <- 1e-4
 
 RndSteps5$ANIMAL_ID <- as.numeric(as.factor(RndSteps5$column_label))
 RndSteps5$case <- as.integer(as.logical(RndSteps5$case_))
-
+saveRDS(RndSteps5, "./RndSteps5.rds")
 #To fit the model with random slopes in INLA, we need to generate new (but identical) variables of individual ID (ID cannot be used multiple times in the model formula):
 RndSteps5$ANIMAL_ID1 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID2 <- RndSteps5$ANIMAL_ID
@@ -243,7 +258,7 @@ RndSteps5$ANIMAL_ID8 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID9 <- RndSteps5$ANIMAL_ID
 
 #Control model
-formula.control <- case ~ sl_ + cos_ta_ + 
+formula.control <- case ~ sl_ + cos_ta_ + log_sl_ +
                     f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-4),fixed=T)))
 
 r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
@@ -254,7 +269,7 @@ r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
 )
 
 r.inla.control$summary.fixed
-
+Efxplot(list(r.inla.control))
 
 library(glmmTMB)
 TMBStruc.control = glmmTMB(case ~ sl_ + cos_ta_ +
@@ -269,9 +284,9 @@ summary(glmm.TMB.control)
 
 #habitat model
 formula.habitat <- case ~ -1 +
-  forest+shrub+herb+wetlands+scale(TRI)+
+  developed+shrub+herb+wetlands+scale(TRI)+
   #movement kernel    
-  sl_ + cos_ta_ +
+  sl_ + cos_ta_ + log_sl_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,forest,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
@@ -298,7 +313,7 @@ Efxplot(list(r.inla.habitat))
 
 #human model
 formula.human <- case ~ -1 +
-  x+x*RA +
+  x+x*TOD+
   #movement kernel    
   sl_ + cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
@@ -314,13 +329,124 @@ r.inla.human <- inla(formula.human, family ="Poisson", data=RndSteps5,
 
 r.inla.human$summary.fixed
 Efxplot(list(r.inla.human))
-#this section is really out there
-Locations = cbind(RndSteps5$x2_, RndSteps5$y2_)
+r.inla.random$summary.hyperpar
 
-MeshB <- inla.mesh.2d(Locations, max.edge = c(20, 40))
-Mesh <- MeshB
-plot(MeshB)
 
+
+#
+RndSteps6 <- select(RndSteps5, c(1,7,11,15,16,17:21,23:53))
+
+
+Day <- filter(RndSteps6, TOD == "day")
+Night <- filter(RndSteps6, TOD == "night")
+Cre <- filter(RndSteps6, TOD == "crepuscular")
+
+#habitat day
+formula.habitat.day <- case ~ -1 +
+  developed+shrub+herb+wetlands+scale(TRI)+
+  #movement kernel    
+  sl_ + cos_ta_ + log_sl_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,forest,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID2,shrub,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID3,herb,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID4,wetlands,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+
+
+
+r.inla.habitat.day <- inla(formula.habitat.day, family ="Poisson", data=Day,
+                       control.fixed = list(
+                         mean = mean.beta,
+                         prec = list(default = prec.beta)
+                       )
+)
+
+r.inla.habitat.day$summary.fixed
+
+Efxplot(list(r.inla.habitat.day))
+
+
+#habitat night
+formula.habitat.night <- case ~ -1 +
+  developed+shrub+herb+wetlands+scale(TRI)+
+  #movement kernel    
+  sl_ + cos_ta_ + log_sl_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,forest,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID2,shrub,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID3,herb,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID4,wetlands,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+
+
+
+r.inla.habitat.night <- inla(formula.habitat.night, family ="Poisson", data=Night,
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           )
+)
+
+r.inla.habitat.day$summary.fixed
+
+Efxplot(list(r.inla.habitat.night))
+
+#habitat cre
+formula.habitat.cre <- case ~ -1 +
+  developed+shrub+herb+wetlands+scale(TRI)+
+  #movement kernel    
+  sl_ + cos_ta_ + log_sl_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,forest,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID2,shrub,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID3,herb,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID4,wetlands,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+
+
+
+r.inla.habitat.cre <- inla(formula.habitat.cre, family ="Poisson", data=Cre,
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           )
+)
+
+r.inla.habitat.cre$summary.fixed
+
+Efxplot(list(r.inla.habitat.cre))
+
+#human day
+formula.human.day <- case ~ -1 +
+  x+x*Total+
+  #movement kernel    
+  sl_ + cos_ta_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,x,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+r.inla.human.day <- inla(formula.human.day, family ="Poisson", data=Day,
+                     control.fixed = list(
+                       mean = mean.beta,
+                       prec = list(default = prec.beta)
+                     )
+)
+
+r.inla.human.day$summary.fixed
+Efxplot(list(r.inla.human.day))
 ####################scrap############################
 o <- read.csv("C:/Users/eliwi/Downloads/d_otter.csv")
 table(o$Loc)
