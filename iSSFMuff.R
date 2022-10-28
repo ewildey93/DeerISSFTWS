@@ -169,8 +169,10 @@ saveRDS(RndSteps4, "./RndSteps4.rds")
 TRI <- raster("C:/Users/eliwi/OneDrive/Documents/Salida/GeospatialLayers/TRI10.26.tif")
 RndSteps4$TRI<-raster::extract(TRI, RndSteps4SF)
 saveRDS(RndSteps4, "./RndSteps4.rds")
+RndSteps4 <- readRDS("./RndSteps4.rds")
 
 #make combo categories
+RndSteps4 <- rename(RndSteps4, 'TOD'='tod_end_')
 RndSteps4 <- RndSteps4%>%
   mutate(forest_day = as.numeric(forest == 1 & TOD == "day"),
          forest_night = as.numeric(forest == 1 & TOD == "night"),
@@ -184,14 +186,41 @@ RndSteps4 <- RndSteps4%>%
 RndSteps4 <- RndSteps4%>%
   mutate(TRI_day = as.numeric(forest == 1 & TOD == "day"),
          TRI_night = as.numeric(forest == 1 & TOD == "night"),
-         TRI_cre = as.numeric(forest == 1 & TOD == "crepuscular"),
-         shrub_day = as.numeric(shrub == 1 & TOD == "day"),
-         shrub_night = as.numeric(shrub == 1 & TOD == "night"),
-         shrub_cre = as.numeric(shrub == 1 & TOD == "crepuscular"),
-         herb_day = as.numeric(herb == 1 & TOD == "day"),
-         herb_night = as.numeric(herb == 1 & TOD == "night"),
-         herb_cre = as.numeric(herb == 1 & TOD == "crepuscular"))
+         TRI_cre = as.numeric(forest == 1 & TOD == "crepuscular"))
 
+RndSteps4 <- RndSteps4%>%
+  mutate(Stratam=as.factor(paste(column_label, burst_)))
+RndSteps4 <- RndSteps4 %>%                               # Replacing values
+  mutate(Stratum = as.integer(Stratam))
+RndSteps4$Stratum <- as.factor(RndSteps4$Stratum)
+class(RndSteps4)
+saveRDS(RndSteps4, "./RndSteps4.rds")
+
+#correlation test
+library(corrplot)
+CoVs <- RndSteps4[,c(18,21,28)]
+CoVs <- CoVs[-(9787:10122),]
+corrplot(cor(CoVs),
+         method = "number",
+         type = "upper" # show only upper side
+)
+cor(CoVs$x,CoVs$RA)
+cor(CoVs$RA,CoVs$TRI)
+
+#remove data without traffic volume
+RndSteps5 <- RndSteps4[-(9787:10122),]
+class(RndSteps5)
+table(is.na(RndSteps5$RA))
+#scale continous variables
+hist(RndSteps5$cos_ta_)
+hist(RndSteps5$ta_)
+hist(RndSteps5$log_sl_)
+hist(RndSteps5$x)
+hist(RndSteps5$RA)
+RndSteps5$sl_ <- scale(RndSteps5$sl_)
+RndSteps5$RA <- scale(RndSteps5$RA)
+RndSteps5$x <- scale(RndSteps5$x)
+saveRDS(RndSteps5, "./RndSteps5.rds")
 ###########################################################################
 ####                           Modelling              #####################
 ###########################################################################
@@ -199,12 +228,98 @@ RndSteps4 <- RndSteps4%>%
 mean.beta <- 0
 prec.beta <- 1e-4 
 
+RndSteps5$ANIMAL_ID <- as.numeric(as.factor(RndSteps5$column_label))
+RndSteps5$case <- as.integer(as.logical(RndSteps5$case_))
+
 #To fit the model with random slopes in INLA, we need to generate new (but identical) variables of individual ID (ID cannot be used multiple times in the model formula):
-dat$ANIMAL_ID1 <- dat$ANIMAL_ID
-dat$ANIMAL_ID2 <- dat$ANIMAL_ID
-dat$ANIMAL_ID3 <- dat$ANIMAL_ID
+RndSteps5$ANIMAL_ID1 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID2 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID3 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID4 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID5 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID6 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID7 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID8 <- RndSteps5$ANIMAL_ID
+RndSteps5$ANIMAL_ID9 <- RndSteps5$ANIMAL_ID
+
+#Control model
+formula.control <- case ~ sl_ + cos_ta_ + 
+                    f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-4),fixed=T)))
+
+r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
+                     control.fixed = list(
+                       mean = mean.beta,
+                       prec = list(default = prec.beta)
+                     )
+)
+
+r.inla.control$summary.fixed
 
 
+library(glmmTMB)
+TMBStruc.control = glmmTMB(case ~ sl_ + cos_ta_ +
+                        (1|Stratum), 
+                      family=poisson, data=RndSteps5, doFit=FALSE) 
+TMBStruc.control$parameters$theta[1] = log(1e3) 
+TMBStruc.control$mapArg = list(theta=factor(c(NA)))
+glmm.TMB.control = glmmTMB:::fitTMB(TMBStruc.control) 
+summary(glmm.TMB.control)
+
+
+
+#habitat model
+formula.habitat <- case ~ -1 +
+  forest+shrub+herb+wetlands+scale(TRI)+
+  #movement kernel    
+  sl_ + cos_ta_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,forest,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID2,shrub,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID3,herb,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID4,wetlands,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+
+
+
+r.inla.habitat <- inla(formula.habitat, family ="Poisson", data=RndSteps5,
+                       control.fixed = list(
+                         mean = mean.beta,
+                         prec = list(default = prec.beta)
+                       )
+)
+
+r.inla.habitat$summary.fixed
+
+Efxplot(list(r.inla.habitat))
+
+#human model
+formula.human <- case ~ -1 +
+  x+x*RA +
+  #movement kernel    
+  sl_ + cos_ta_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,x,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+r.inla.human <- inla(formula.human, family ="Poisson", data=RndSteps5,
+                       control.fixed = list(
+                         mean = mean.beta,
+                         prec = list(default = prec.beta)
+                       )
+)
+
+r.inla.human$summary.fixed
+Efxplot(list(r.inla.human))
+#this section is really out there
+Locations = cbind(RndSteps5$x2_, RndSteps5$y2_)
+
+MeshB <- inla.mesh.2d(Locations, max.edge = c(20, 40))
+Mesh <- MeshB
+plot(MeshB)
 
 ####################scrap############################
 o <- read.csv("C:/Users/eliwi/Downloads/d_otter.csv")
@@ -216,3 +331,6 @@ Out <- Deer[["F49862"]][(Deer[["F49862"]]$DateTime %in% F49862out$DateTime),]
 
 z <- RndStepsSF[["F46538"]][1:40,]
 st_distance(z, TrailsSF)
+table(is.na(CoVs$RA))
+which(is.na(CoVs$RA))
+what <- RndSteps4[9787:10122,]
