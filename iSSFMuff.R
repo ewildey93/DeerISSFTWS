@@ -81,8 +81,8 @@ min <- min-5*60*60
 max <- max
 min <- as.POSIXct(format(round(min, units="hours"), format="%Y-%m-%d %H:%M"),tz="America/Denver")
 max <- as.POSIXct(format(round(max, units="hours"), format="%Y-%m-%d %H:%M"),tz="America/Denver")
-#min <- "2021-04-05 17:00:00 MDT"
-#max <- "2022-10-09 11:00:00 MDT"
+min <- "2021-04-05 17:00:00 MDT"
+max <- "2022-10-09 11:00:00 MDT"
 
 #####################################################################################
 #####################################################################################
@@ -126,7 +126,9 @@ Dist2TrailDF <- lapply(Dist2Trail, function (x) as.data.frame(x, col.names="Dist
 RndSteps2 <- mapply(bind_cols, RndSteps, Dist2TrailDF, SIMPLIFY=FALSE)
 #RndSteps2B <- lapply(RndSteps, function (x) left_join(x,D2TList, by=c(''=".id"), all=T))
 saveRDS(RndSteps2, "./RndSteps2.rds")
-
+RndSteps2 <- readRDS("./RndSteps2.rds")
+max <- max(sapply(RndSteps2, function(x) as.character(max(x$x, na.rm=TRUE))))
+min <- min(sapply(RndSteps2, function(x) as.character(min(x$x, na.rm=TRUE))))
 #Traffic volume-daily
 LRTrail <- read.csv("./CoVs/Little Rainbow Trail RAW.csv", header=FALSE)
 SpartanTH <- read.csv("./CoVs/Spartan T.H. Parking Lot RAW.csv", header=FALSE)
@@ -204,6 +206,8 @@ colnames(Daily2)[1] <- "Date"
 Daily2$Date <- as.Date(Daily2$Date)
 RndSteps4 <- mutate(RndSteps4, Date= as.Date(RndSteps4$t2_))
 RndSteps4 <- left_join(x = RndSteps4, y=Daily2, by="Date", all.x=T)
+RndSteps4 <- RndSteps4[-(9787:10122),]
+saveRDS(RndSteps4, "./RndSteps4.rds")
 #correlation test
 library(corrplot)
 CoVs <- RndSteps4[,c(18,21,28)]
@@ -256,7 +260,7 @@ RndSteps5$ANIMAL_ID6 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID7 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID8 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID9 <- RndSteps5$ANIMAL_ID
-
+saveRDS(RndSteps5, "./RndSteps5.rds")
 #Control model
 formula.control <- case ~ sl_ + cos_ta_ + log_sl_ +
                     f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-4),fixed=T)))
@@ -265,7 +269,7 @@ r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
                      control.fixed = list(
                        mean = mean.beta,
                        prec = list(default = prec.beta)
-                     )
+                     ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 r.inla.control$summary.fixed
@@ -304,7 +308,7 @@ r.inla.habitat <- inla(formula.habitat, family ="Poisson", data=RndSteps5,
                        control.fixed = list(
                          mean = mean.beta,
                          prec = list(default = prec.beta)
-                       )
+                       ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat$summary.fixed
@@ -335,7 +339,8 @@ r.inla.random$summary.hyperpar
 
 #
 RndSteps6 <- select(RndSteps5, c(1,7,11,15,16,17:21,23:53))
-
+RndSteps6$Total <- scale(RndSteps6$Total)
+RndSteps6$Daily <- scale(RndSteps6$Daily)
 
 Day <- filter(RndSteps6, TOD == "day")
 Night <- filter(RndSteps6, TOD == "night")
@@ -430,8 +435,15 @@ r.inla.habitat.cre$summary.fixed
 Efxplot(list(r.inla.habitat.cre))
 
 #human day
+Day2 <- Day[,c(2,4,5,7,30,37,38)]
+seq <- rep(g$round, times=9)
+#g=41 obs
+x <- rep(g$`RndSteps5$x`, times=9)
+newobs <- data.frame(sl_=0,log_sl_=0,cos_ta_=0,x=x,UnscaleDist=seq,Stratum=seq(424:792),case=NA,ANIMAL_ID1=rep(1:9, each=41))
+newsobs <- newobs[order(newobs$ANIMAL_ID1,newobs$x),]
+
 formula.human.day <- case ~ -1 +
-  x+x*Total+
+  x+
   #movement kernel    
   sl_ + cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
@@ -442,9 +454,10 @@ r.inla.human.day <- inla(formula.human.day, family ="Poisson", data=Day,
                      control.fixed = list(
                        mean = mean.beta,
                        prec = list(default = prec.beta)
-                     )
+                     ),control.compute = list(dic = TRUE, waic = TRUE),control.predictor = list(compute=TRUE),
 )
 
+c(WAIC=r.inla.human.day$waic$waic, DIC=r.inla.human.day$dic$dic)
 r.inla.human.day$summary.fixed
 Efxplot(list(r.inla.human.day))
 ####################scrap############################
@@ -460,3 +473,16 @@ st_distance(z, TrailsSF)
 table(is.na(CoVs$RA))
 which(is.na(CoVs$RA))
 what <- RndSteps4[9787:10122,]
+which(table(RndSteps4$step_id_) != 10 )
+table(Day2$ANIMAL_ID1)
+hist(Day2$sl_)
+hist(Day2$log_sl_)
+hist(Day2$cos_ta_)
+hist(RndSteps4$x)
+scalex <- cbind.data.frame(RndSteps4$x,RndSteps5$x)
+scalex$round <- round(scalex$`RndSteps4$x`)
+e <- scalex[scalex$round %in% seq,]
+table(e$round)
+range(RndSteps4$x)
+f <- scalex[as.numeric(scalex$`RndSteps4$x`) < 2650,]
+g <- e%>%distinct(round, .keep_all = T)
