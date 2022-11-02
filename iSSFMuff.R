@@ -13,6 +13,8 @@ library(data.table)
 library(amt)
 library(zoo)
 library(INLA)
+library(ggregplot)
+library(magrittr)
 setwd("C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS")
 
 filenames <- list.files(path = "C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS/Data",pattern = ".csv",full.names = TRUE)
@@ -240,8 +242,9 @@ RndSteps5$RA <- scale(RndSteps5$RA)
 RndSteps5$x <- scale(RndSteps5$x)
 RndSteps5$log_sl_ <- scale(RndSteps5$log_sl_)
 saveRDS(RndSteps5, "./RndSteps5.rds")
+RndSteps5 <- readRDS("./RndSteps5.rds")
 ###########################################################################
-####                           Modelling              #####################
+####                           Modelling-iSSF         #####################
 ###########################################################################
 #' Set mean and precision for the priors of slope coefficients
 mean.beta <- 0
@@ -274,6 +277,7 @@ r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
 
 r.inla.control$summary.fixed
 Efxplot(list(r.inla.control))
+c(WAIC=r.inla.control$waic$waic, DIC=r.inla.control$dic$dic)
 
 library(glmmTMB)
 TMBStruc.control = glmmTMB(case ~ sl_ + cos_ta_ +
@@ -312,12 +316,12 @@ r.inla.habitat <- inla(formula.habitat, family ="Poisson", data=RndSteps5,
 )
 
 r.inla.habitat$summary.fixed
-
+c(WAIC=r.inla.habitat$waic$waic, DIC=r.inla.habitat$dic$dic)
 Efxplot(list(r.inla.habitat))
 
 #human model
 formula.human <- case ~ -1 +
-  x+x*TOD+
+  x+x*Daily+
   #movement kernel    
   sl_ + cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
@@ -328,20 +332,57 @@ r.inla.human <- inla(formula.human, family ="Poisson", data=RndSteps5,
                        control.fixed = list(
                          mean = mean.beta,
                          prec = list(default = prec.beta)
-                       )
+                       ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 r.inla.human$summary.fixed
 Efxplot(list(r.inla.human))
 r.inla.random$summary.hyperpar
+c(WAIC=r.inla.human$waic$waic, DIC=r.inla.human$dic$dic)
+#global
+formula.global <- case ~ -1 +
+  #habitat
+  developed+shrub+herb+wetlands+scale(TRI)+
+  #human
+  x+x*Daily+
+  #movement kernel    
+  sl_ + cos_ta_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,x,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID2,forest,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID3,shrub,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID4,herb,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID5,wetlands,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
 
+r.inla.global <- inla(formula.global, family ="Poisson", data=RndSteps5,
+                     control.fixed = list(
+                       mean = mean.beta,
+                       prec = list(default = prec.beta)
+                     ),control.compute = list(dic = TRUE, waic = TRUE)
+)
+Efxplot(list(r.inla.global))
 
+#################################################################
+#####################Model Selection#############################
+#################################################################
+#see function at bottom
+ModelList <- list(control=r.inla.control, habitat=r.inla.habitat,human=r.inla.human, global=r.inla.global)
+ModelSelTable <- INLA.model.sel(ModelList)
 
 #
 RndSteps6 <- select(RndSteps5, c(1,7,11,15,16,17:21,23:53))
 RndSteps6$Total <- scale(RndSteps6$Total)
 RndSteps6$Daily <- scale(RndSteps6$Daily)
 
+
+##########################################################
+################iSSF by TOD###############################
+##########################################################
 Day <- filter(RndSteps6, TOD == "day")
 Night <- filter(RndSteps6, TOD == "night")
 Cre <- filter(RndSteps6, TOD == "crepuscular")
@@ -368,11 +409,11 @@ r.inla.habitat.day <- inla(formula.habitat.day, family ="Poisson", data=Day,
                        control.fixed = list(
                          mean = mean.beta,
                          prec = list(default = prec.beta)
-                       )
+                       ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat.day$summary.fixed
-
+c(WAIC=r.inla.habitat.day$waic$waic, DIC=r.inla.habitat.day$dic$dic)
 Efxplot(list(r.inla.habitat.day))
 
 
@@ -398,11 +439,11 @@ r.inla.habitat.night <- inla(formula.habitat.night, family ="Poisson", data=Nigh
                            control.fixed = list(
                              mean = mean.beta,
                              prec = list(default = prec.beta)
-                           )
+                           ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat.day$summary.fixed
-
+c(WAIC=r.inla.habitat.night$waic$waic, DIC=r.inla.habitat.night$dic$dic)
 Efxplot(list(r.inla.habitat.night))
 
 #habitat cre
@@ -431,7 +472,7 @@ r.inla.habitat.cre <- inla(formula.habitat.cre, family ="Poisson", data=Cre,
 )
 
 r.inla.habitat.cre$summary.fixed
-
+c(WAIC=r.inla.habitat.cre$waic$waic, DIC=r.inla.habitat.cre$dic$dic)
 Efxplot(list(r.inla.habitat.cre))
 
 #human day
@@ -486,3 +527,18 @@ table(e$round)
 range(RndSteps4$x)
 f <- scalex[as.numeric(scalex$`RndSteps4$x`) < 2650,]
 g <- e%>%distinct(round, .keep_all = T)
+###################################################################
+#functions#########################################################
+###################################################################
+INLA.model.sel <- function (x) {
+  df <- data.frame(WAIC=numeric(),DIC=numeric())
+  
+  a <- lapply(x, function (x) rbind(df,data.frame(WAIC=x$waic$waic, DIC=x$dic$dic)))
+  b <- rbindlist(a,idcol = T)
+  b$DeltaWAIC <- b$WAIC-min(b$WAIC)
+  b$DeltaDIC <- b$DIC-min(b$DIC)
+  b <- b[order(b$DeltaWAIC,b$DeltaDIC),]
+  return(b)
+}
+ModelList <- list(control=r.inla.control, habitat=r.inla.habitat,human=r.inla.human)
+ModelSelTable <- INLA.model.sel(ModelList)
