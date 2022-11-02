@@ -210,6 +210,9 @@ RndSteps4 <- mutate(RndSteps4, Date= as.Date(RndSteps4$t2_))
 RndSteps4 <- left_join(x = RndSteps4, y=Daily2, by="Date", all.x=T)
 RndSteps4 <- RndSteps4[-(9787:10122),]
 saveRDS(RndSteps4, "./RndSteps4.rds")
+RndSteps4 <- readRDS("./RndSteps4.rds")
+hist(RndSteps4$log_sl_)
+hist(RndSteps4$sl_)
 #correlation test
 library(corrplot)
 CoVs <- RndSteps4[,c(18,21,28)]
@@ -272,7 +275,7 @@ r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
                      control.fixed = list(
                        mean = mean.beta,
                        prec = list(default = prec.beta)
-                     ),control.compute = list(dic = TRUE, waic = TRUE)
+                     ),control.compute = list(cpo = TRUE,dic = TRUE, waic = TRUE)
 )
 
 r.inla.control$summary.fixed
@@ -312,7 +315,7 @@ r.inla.habitat <- inla(formula.habitat, family ="Poisson", data=RndSteps5,
                        control.fixed = list(
                          mean = mean.beta,
                          prec = list(default = prec.beta)
-                       ),control.compute = list(dic = TRUE, waic = TRUE)
+                       ),control.compute = list(cpo = TRUE,dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat$summary.fixed
@@ -321,9 +324,9 @@ Efxplot(list(r.inla.habitat))
 
 #human model
 formula.human <- case ~ -1 +
-  x+x*Daily+
+  x+
   #movement kernel    
-  sl_ + cos_ta_ +
+  sl_ + cos_ta_ + log_sl_+RA*log_sl_+
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
@@ -332,7 +335,7 @@ r.inla.human <- inla(formula.human, family ="Poisson", data=RndSteps5,
                        control.fixed = list(
                          mean = mean.beta,
                          prec = list(default = prec.beta)
-                       ),control.compute = list(dic = TRUE, waic = TRUE)
+                       ),control.compute = list(cpo = TRUE,dic = TRUE, waic = TRUE)
 )
 
 r.inla.human$summary.fixed
@@ -344,9 +347,9 @@ formula.global <- case ~ -1 +
   #habitat
   developed+shrub+herb+wetlands+scale(TRI)+
   #human
-  x+x*Daily+
+  x+
   #movement kernel    
-  sl_ + cos_ta_ +
+  sl_ + cos_ta_ + log_sl_ + log_sl_*RA +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
@@ -363,9 +366,9 @@ r.inla.global <- inla(formula.global, family ="Poisson", data=RndSteps5,
                      control.fixed = list(
                        mean = mean.beta,
                        prec = list(default = prec.beta)
-                     ),control.compute = list(dic = TRUE, waic = TRUE)
+                     ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
-Efxplot(list(r.inla.global))
+GlobalEfx <- Efxplot(list(r.inla.global))
 
 #################################################################
 #####################Model Selection#############################
@@ -373,7 +376,8 @@ Efxplot(list(r.inla.global))
 #see function at bottom
 ModelList <- list(control=r.inla.control, habitat=r.inla.habitat,human=r.inla.human, global=r.inla.global)
 ModelSelTable <- INLA.model.sel(ModelList)
-
+saveRDS(ModelSelTable, "./ModelSelTable.rds")
+write.csv(ModelSelTable, "./ModelSelTable.csv")
 #
 RndSteps6 <- select(RndSteps5, c(1,7,11,15,16,17:21,23:53))
 RndSteps6$Total <- scale(RndSteps6$Total)
@@ -531,9 +535,9 @@ g <- e%>%distinct(round, .keep_all = T)
 #functions#########################################################
 ###################################################################
 INLA.model.sel <- function (x) {
-  df <- data.frame(WAIC=numeric(),DIC=numeric())
+  df <- data.frame(WAIC=numeric(),DIC=numeric(),CPO=numeric(),ML=numeric())
   
-  a <- lapply(x, function (x) rbind(df,data.frame(WAIC=x$waic$waic, DIC=x$dic$dic)))
+  a <- lapply(x, function (x) rbind(df,data.frame(WAIC=x$waic$waic, DIC=x$dic$dic, CPO=-1*sum(log(x$cpo$cpo)), ML=as.numeric(x$mlik[1,1]))))
   b <- rbindlist(a,idcol = T)
   b$DeltaWAIC <- b$WAIC-min(b$WAIC)
   b$DeltaDIC <- b$DIC-min(b$DIC)
