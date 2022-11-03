@@ -379,7 +379,7 @@ ModelSelTable <- INLA.model.sel(ModelList)
 saveRDS(ModelSelTable, "./ModelSelTable.rds")
 write.csv(ModelSelTable, "./ModelSelTable.csv")
 #
-RndSteps6 <- select(RndSteps5, c(1,7,11,15,16,17:21,23:53))
+RndSteps6 <- select(RndSteps5, c(1,7,11,15,16,17:21,23:58))
 RndSteps6$Total <- scale(RndSteps6$Total)
 RndSteps6$Daily <- scale(RndSteps6$Daily)
 
@@ -390,7 +390,13 @@ RndSteps6$Daily <- scale(RndSteps6$Daily)
 Day <- filter(RndSteps6, TOD == "day")
 Night <- filter(RndSteps6, TOD == "night")
 Cre <- filter(RndSteps6, TOD == "crepuscular")
-
+#control day
+r.inla.control.day <- inla(formula.control, family ="Poisson", data=Day,
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+)
 #habitat day
 formula.habitat.day <- case ~ -1 +
   developed+shrub+herb+wetlands+scale(TRI)+
@@ -409,17 +415,77 @@ formula.habitat.day <- case ~ -1 +
 
 
 
-r.inla.habitat.day <- inla(formula.habitat.day, family ="Poisson", data=Day,
+r.inla.habitat.day <- inla(formula.habitat, family ="Poisson", data=Day,
                        control.fixed = list(
                          mean = mean.beta,
                          prec = list(default = prec.beta)
-                       ),control.compute = list(dic = TRUE, waic = TRUE)
+                       ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat.day$summary.fixed
 c(WAIC=r.inla.habitat.day$waic$waic, DIC=r.inla.habitat.day$dic$dic)
 Efxplot(list(r.inla.habitat.day))
 
+#human day
+Day2 <- Day[,c(2,4,5,7,30,37,38)]
+seq <- rep(g$round, times=9)
+#g=41 obs
+x <- rep(g$`RndSteps5$x`, times=9)
+newobs <- data.frame(sl_=0,log_sl_=0,cos_ta_=0,x=x,UnscaleDist=seq,Stratum=seq(424:792),case=NA,ANIMAL_ID1=rep(1:9, each=41))
+newsobs <- newobs[order(newobs$ANIMAL_ID1,newobs$x),]
+
+formula.human.day <- case ~ -1 +
+  x+
+  #movement kernel    
+  sl_ + cos_ta_ + log_sl_+RA*log_sl_
+f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,x,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+r.inla.human.day <- inla(formula.human, family ="Poisson", data=Day,
+                         control.fixed = list(
+                           mean = mean.beta,
+                           prec = list(default = prec.beta)
+                         ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE),control.predictor = list(compute=TRUE),
+)
+
+c(WAIC=r.inla.human.day$waic$waic, DIC=r.inla.human.day$dic$dic)
+r.inla.human.day$summary.fixed
+Efxplot(list(r.inla.human.day))
+
+#global
+formula.global.day <- case ~ -1 +
+  #habitat
+  developed+shrub+herb+wetlands+scale(TRI)+
+  #human
+  x+
+  #movement kernel    
+  sl_ + cos_ta_ + log_sl_ + log_sl_*RA +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,x,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID2,forest,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID3,shrub,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID4,herb,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID5,wetlands,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+r.inla.global.day <- inla(formula.global, family ="Poisson", data=Day,
+                      control.fixed = list(
+                        mean = mean.beta,
+                        prec = list(default = prec.beta)
+                      ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+)
+Efxplot(list(r.inla.global.day))
+
+#Model selection
+DayList <- list(control.day=r.inla.control.day,habitat.day=r.inla.habitat.day,human.day=r.inla.human.day,global.day=r.inla.global.day)
+DayTable <- INLA.model.sel(DayList)
+
+##################################################################################
 
 #habitat night
 formula.habitat.night <- case ~ -1 +
@@ -439,7 +505,7 @@ formula.habitat.night <- case ~ -1 +
 
 
 
-r.inla.habitat.night <- inla(formula.habitat.night, family ="Poisson", data=Night,
+r.inla.habitat.night <- inla(formula.habitat, family ="Poisson", data=Night,
                            control.fixed = list(
                              mean = mean.beta,
                              prec = list(default = prec.beta)
@@ -450,6 +516,36 @@ r.inla.habitat.day$summary.fixed
 c(WAIC=r.inla.habitat.night$waic$waic, DIC=r.inla.habitat.night$dic$dic)
 Efxplot(list(r.inla.habitat.night))
 
+#control night
+r.inla.control.night <- inla(formula.control, family ="Poisson", data=Night,
+                             control.fixed = list(
+                               mean = mean.beta,
+                               prec = list(default = prec.beta)
+                             ),control.compute = list(dic = TRUE, waic = TRUE)
+)
+
+#human night
+r.inla.human.night <- inla(formula.human, family ="Poisson", data=Night,
+                             control.fixed = list(
+                               mean = mean.beta,
+                               prec = list(default = prec.beta)
+                             ),control.compute = list(dic = TRUE, waic = TRUE)
+)
+
+#global night
+r.inla.global.night <- inla(formula.global, family ="Poisson", data=Night,
+                             control.fixed = list(
+                               mean = mean.beta,
+                               prec = list(default = prec.beta)
+                             ),control.compute = list(dic = TRUE, waic = TRUE)
+)
+Efxplot(list(r.inla.global.night))
+#Model Selection
+NightList <- list(control.night=r.inla.control.night,habitat.night=r.inla.habitat.night,human.night=r.inla.human.night,global.night=r.inla.global.night)
+NightTable <- INLA.model.sel(NightList)
+
+
+#################################################################################
 #habitat cre
 formula.habitat.cre <- case ~ -1 +
   developed+shrub+herb+wetlands+scale(TRI)+
@@ -468,43 +564,46 @@ formula.habitat.cre <- case ~ -1 +
 
 
 
-r.inla.habitat.cre <- inla(formula.habitat.cre, family ="Poisson", data=Cre,
+r.inla.habitat.cre <- inla(formula.habitat, family ="Poisson", data=Cre,
                            control.fixed = list(
                              mean = mean.beta,
                              prec = list(default = prec.beta)
-                           )
+                           ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat.cre$summary.fixed
 c(WAIC=r.inla.habitat.cre$waic$waic, DIC=r.inla.habitat.cre$dic$dic)
 Efxplot(list(r.inla.habitat.cre))
 
-#human day
-Day2 <- Day[,c(2,4,5,7,30,37,38)]
-seq <- rep(g$round, times=9)
-#g=41 obs
-x <- rep(g$`RndSteps5$x`, times=9)
-newobs <- data.frame(sl_=0,log_sl_=0,cos_ta_=0,x=x,UnscaleDist=seq,Stratum=seq(424:792),case=NA,ANIMAL_ID1=rep(1:9, each=41))
-newsobs <- newobs[order(newobs$ANIMAL_ID1,newobs$x),]
-
-formula.human.day <- case ~ -1 +
-  x+
-  #movement kernel    
-  sl_ + cos_ta_ +
-  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
-  f(ANIMAL_ID1,x,values=1:9,model="iid",
-    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
-
-r.inla.human.day <- inla(formula.human.day, family ="Poisson", data=Day,
-                     control.fixed = list(
-                       mean = mean.beta,
-                       prec = list(default = prec.beta)
-                     ),control.compute = list(dic = TRUE, waic = TRUE),control.predictor = list(compute=TRUE),
+#control cre
+r.inla.control.cre <- inla(formula.control, family ="Poisson", data=Cre,
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
-c(WAIC=r.inla.human.day$waic$waic, DIC=r.inla.human.day$dic$dic)
-r.inla.human.day$summary.fixed
-Efxplot(list(r.inla.human.day))
+#human.cre
+r.inla.human.cre <- inla(formula.human, family ="Poisson", data=Cre,
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(dic = TRUE, waic = TRUE)
+)
+Efxplot(list(r.inla.human.cre))
+#global.cre
+r.inla.global.cre <- inla(formula.global, family ="Poisson", data=Cre,
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(dic = TRUE, waic = TRUE)
+)
+
+Efxplot(list(r.inla.global.cre))
+#Model Selection
+CreList <- list(control.cre=r.inla.control.cre,habitat.cre=r.inla.habitat.cre,human.cre=r.inla.human.cre,global.cre=r.inla.global.cre)
+CreTable <- INLA.model.sel(CreList)
+
 ####################scrap############################
 o <- read.csv("C:/Users/eliwi/Downloads/d_otter.csv")
 table(o$Loc)

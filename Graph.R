@@ -181,7 +181,8 @@ Efxplot2 <- function(ModelList,
     PointOutlineAlpha <- 0
     
   }
-
+  return(Graph)
+}
   cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")  
   
   ggplot(Graph,
@@ -206,10 +207,10 @@ Efxplot2 <- function(ModelList,
                   position = position_dodge(w = 0.5)) +
     geom_point(position = position_dodge(w = 0.5), size = PointSize) +
   scale_colour_manual(values=cbbPalette)
-}
+
 
 Efxplot2(r.inla.global)
-`cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+cbbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 # To use for line and point colors, add
 scale_colour_manual(values=cbPalette)
 
@@ -223,7 +224,7 @@ ggplot(GraphGlobal,
   geom_hline(aes(yintercept = 0),lty = 2, colour="#56B4E9") + labs(x = NULL) + coord_flip() +
   geom_text(aes(label = Sig, y = starloc),
             position = position_dodge(w = 0.5),colour="#009E73",
-            show.legend = F) +
+            show.legend = F, size=8) +
   scale_alpha_manual(values = c(1, 1)) +
   guides(alpha = "none") +
   geom_errorbar(aes(ymin = Lower, ymax = Upper, colour="#E69F00"),
@@ -232,4 +233,40 @@ ggplot(GraphGlobal,
   geom_point(position = position_dodge(w = 0.5), size = 1) +
   scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Log Step Length','Cosine Turning Angle','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Shrub','Developed')) +
   ggtitle("Posterior Beta Estimates for Global Model") +
-  theme(plot.title = element_text(hjust = 0.8),panel.background = element_blank())
+  theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
+
+
+
+#Day and Night
+DayNightList <- list(Day=r.inla.global.day, Night=r.inla.global.night)
+DayNightGraph <- Efxplot2(DayNightList)
+DayNightGraph <- DayNightGraph[c(-10,-21),]
+position <- ifelse(length(unique(DayNightGraph$Model))  ==  1, "none", "right")
+
+ggplot(DayNightGraph,
+       aes(x = as.factor(Factor),
+           y = Estimate,
+           group = Model,
+           colour = Model,
+           alpha = SigAlpha)) +
+  geom_point(position = position_dodge(w = 0.5), size = 2) +
+  geom_errorbar(position = position_dodge(w = 0.5),
+                aes(ymin = Lower, ymax = Upper), width = 0, show.legend=T) +
+  geom_hline(aes(yintercept = 0),lty = 2) + labs(x = NULL) + coord_flip() +
+  theme(legend.position = position) +
+  geom_text(aes(label = Sig, y = starloc),
+            position = position_dodge(w = 0.5),
+            show.legend = F, size=8) +
+  scale_alpha_manual(values = c(1, 1)) +
+  guides(alpha = "none") +
+  geom_point(position = position_dodge(w = 0.5), size = 2,
+             alpha = 1) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper),
+                width = 0,
+                position = position_dodge(w = 0.5)) +
+  geom_point(position = position_dodge(w = 0.5), size = 1) +
+  scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Log Step Length','Cosine Turning Angle','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Shrub','Developed')) +
+  ggtitle("Posterior Beta Estimates for Day and Night Models") +
+  labs(color= "Legend") +
+  scale_colour_manual(values= cbbPalette) +
+  theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
