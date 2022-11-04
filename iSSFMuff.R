@@ -74,6 +74,7 @@ trk1 <- lapply(trkList, function (x) track_resample(x,rate=hours(4), tolerance=m
 trk2 <- lapply(trk1, function (x)filter_min_n_burst(x,min_n=3))         
 steps <- lapply(trk2, function (x) steps_by_burst(x))
 saveRDS(steps, "./DeerSteps.rds")
+steps <- readRDS('./DeerSteps.rds')
 
 max <- max(sapply(steps, function(x) as.character(max(x$t2_, na.rm=TRUE))))
 min <- min(sapply(steps, function(x) as.character(min(x$t2_, na.rm=TRUE))))
@@ -89,8 +90,13 @@ max <- "2022-10-09 11:00:00 MDT"
 #####################################################################################
 #####################################################################################
 # Step 1. Sample ----
-RndSteps <- lapply(steps, function (x) random_steps(x, n_control = 20))
+RndSteps <- lapply(steps, function (x) random_steps(x, n_control = 20,
+                   sl_distr = fit_distr(RndSteps4$sl_, "gamma"),
+                   ta_distr= fit_distr(RndSteps4$ta_, "vonmises")))
 
+#distributions fir using RndSteps4 df so theres one distribution instead of 10
+tadist <- fit_distr(RndSteps4$ta_, "vonmises")
+sldist <- fit_distr(RndSteps4$sl_, "gamma")
 # Since we used the gamma distribution as our tentative step-length
 # distribution, we need to include step length and log(step length)
 # in our iSSF. We already have a column, 'sl_', but we need to add 
@@ -102,6 +108,7 @@ RndSteps <- lapply(RndSteps, function (x) {
          cos_ta_ = cos(x$ta_))})
 saveRDS(RndSteps, "./DeerRndSteps.rds")
 write.csv(rbindlist(RndSteps), "./RndStepsdf.csv")
+RndSteps <- readRDS("./DeerRndSteps.rds")
 #########################################################################
 # Step 2. Attribute ---                                                 #
 #########################################################################
@@ -213,6 +220,7 @@ saveRDS(RndSteps4, "./RndSteps4.rds")
 RndSteps4 <- readRDS("./RndSteps4.rds")
 hist(RndSteps4$log_sl_)
 hist(RndSteps4$sl_)
+range(RndSteps4$Total)
 #correlation test
 library(corrplot)
 CoVs <- RndSteps4[,c(18,21,28)]
@@ -226,10 +234,10 @@ cor(CoVs$RA,CoVs$TRI)
 
 #remove data without traffic volume
 
-RndSteps5 <- RndSteps4[-(9787:10122),]
+#RndSteps5 <- RndSteps4[-(9787:10122),]
 class(RndSteps5)
 table(is.na(RndSteps5$RA))
-
+range(RndSteps5$Total)
 
 #scale continous variables
 hist(RndSteps4$cos_ta_)
@@ -237,7 +245,7 @@ hist(RndSteps4$ta_)
 hist(RndSteps5$log_sl_)
 hist(RndSteps5$x)
 hist(RndSteps5$RA)
-RndSteps5 <- RndSteps5 %>% 
+RndSteps5 <- RndSteps4 %>% 
   mutate(sl_ = replace(sl_, sl_==0, 1))
 RndSteps5 <- mutate(RndSteps5, log_sl_= log(sl_))
 RndSteps5$sl_ <- scale(RndSteps5$sl_)
@@ -282,14 +290,14 @@ r.inla.control$summary.fixed
 Efxplot(list(r.inla.control))
 c(WAIC=r.inla.control$waic$waic, DIC=r.inla.control$dic$dic)
 
-library(glmmTMB)
-TMBStruc.control = glmmTMB(case ~ sl_ + cos_ta_ +
-                        (1|Stratum), 
-                      family=poisson, data=RndSteps5, doFit=FALSE) 
-TMBStruc.control$parameters$theta[1] = log(1e3) 
-TMBStruc.control$mapArg = list(theta=factor(c(NA)))
-glmm.TMB.control = glmmTMB:::fitTMB(TMBStruc.control) 
-summary(glmm.TMB.control)
+#library(glmmTMB)
+#TMBStruc.control = glmmTMB(case ~ sl_ + cos_ta_ +
+#                        (1|Stratum), 
+#                      family=poisson, data=RndSteps5, doFit=FALSE) 
+#TMBStruc.control$parameters$theta[1] = log(1e3) 
+#TMBStruc.control$mapArg = list(theta=factor(c(NA)))
+#glmm.TMB.control = glmmTMB:::fitTMB(TMBStruc.control) 
+#summary(glmm.TMB.control)
 
 
 
@@ -324,9 +332,9 @@ Efxplot(list(r.inla.habitat))
 
 #human model
 formula.human <- case ~ -1 +
-  x+
+  x*RA+
   #movement kernel    
-  sl_ + cos_ta_ + log_sl_+RA*log_sl_+
+  sl_ + cos_ta_ + log_sl_+
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
@@ -345,17 +353,17 @@ c(WAIC=r.inla.human$waic$waic, DIC=r.inla.human$dic$dic)
 #global
 formula.global <- case ~ -1 +
   #habitat
-  developed+shrub+herb+wetlands+scale(TRI)+
+  developed+forest+herb+wetlands+scale(TRI)+
   #human
   x+
   #movement kernel    
-  sl_ + cos_ta_ + log_sl_ + log_sl_*RA +
+  sl_ *RA+ cos_ta_ + log_sl_*RA +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
   f(ANIMAL_ID2,forest,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
-  f(ANIMAL_ID3,shrub,values=1:9,model="iid",
+  f(ANIMAL_ID3,developed,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
   f(ANIMAL_ID4,herb,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
@@ -368,21 +376,21 @@ r.inla.global <- inla(formula.global, family ="Poisson", data=RndSteps5,
                        prec = list(default = prec.beta)
                      ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
-GlobalEfx <- Efxplot(list(r.inla.global))
+Efxplot(list(r.inla.global))
 #global2
 formula.global.2 <- case ~ -1 +
   #habitat
-  developed+shrub+herb+wetlands+scale(TRI)+
+  developed+forest*RA+herb+wetlands+scale(TRI)+
   #human
   x+
   #movement kernel    
-  sl_ + cos_ta_ + sl_*RA +
+  sl_ * RA  + log_sl_*RA +cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
   f(ANIMAL_ID2,forest,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
-  f(ANIMAL_ID3,shrub,values=1:9,model="iid",
+  f(ANIMAL_ID3,developed,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
   f(ANIMAL_ID4,herb,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
@@ -396,7 +404,9 @@ r.inla.global.2 <- inla(formula.global.2, family ="Poisson", data=RndSteps5,
                       ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 
-
+Efxplot(list(r.inla.global.2))
+ModelList <- list(control=r.inla.control, habitat=r.inla.habitat,human=r.inla.human, global=r.inla.global,global2=r.inla.global.2)
+ModelSelTable <- INLA.model.sel(ModelList)
 #################################################################
 #####################Model Selection#############################
 #################################################################
@@ -406,7 +416,7 @@ ModelSelTable <- INLA.model.sel(ModelList)
 saveRDS(ModelSelTable, "./ModelSelTable.rds")
 write.csv(ModelSelTable, "./ModelSelTable.csv")
 #
-RndSteps6 <- select(RndSteps5, c(1,7,11,15,16,17:21,23:58))
+RndSteps6 <- RndSteps5
 RndSteps6$Total <- scale(RndSteps6$Total)
 RndSteps6$Daily <- scale(RndSteps6$Daily)
 
@@ -508,8 +518,16 @@ r.inla.global.day <- inla(formula.global, family ="Poisson", data=Day,
 )
 Efxplot(list(r.inla.global.day))
 
+#global 2 day
+r.inla.global.day2 <- inla(formula.global.2, family ="Poisson", data=Day,
+                          control.fixed = list(
+                            mean = mean.beta,
+                            prec = list(default = prec.beta)
+                          ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+)
+Efxplot(list(r.inla.global.day2))
 #Model selection
-DayList <- list(control.day=r.inla.control.day,habitat.day=r.inla.habitat.day,human.day=r.inla.human.day,global.day=r.inla.global.day)
+DayList <- list(control.day=r.inla.control.day,habitat.day=r.inla.habitat.day,human.day=r.inla.human.day,global.day=r.inla.global.day, global.day.2=r.inla.global.day2)
 DayTable <- INLA.model.sel(DayList)
 
 ##################################################################################
@@ -539,7 +557,7 @@ r.inla.habitat.night <- inla(formula.habitat, family ="Poisson", data=Night,
                            ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
-r.inla.habitat.day$summary.fixed
+r.inla.habitat.night$summary.fixed
 c(WAIC=r.inla.habitat.night$waic$waic, DIC=r.inla.habitat.night$dic$dic)
 Efxplot(list(r.inla.habitat.night))
 
@@ -560,6 +578,8 @@ r.inla.human.night <- inla(formula.human, family ="Poisson", data=Night,
 )
 
 #global night
+formula.global
+
 r.inla.global.night <- inla(formula.global, family ="Poisson", data=Night,
                              control.fixed = list(
                                mean = mean.beta,
@@ -567,8 +587,18 @@ r.inla.global.night <- inla(formula.global, family ="Poisson", data=Night,
                              ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 Efxplot(list(r.inla.global.night))
+
+#global 2 night
+formula.global.2
+r.inla.global.night2 <- inla(formula.global.2, family ="Poisson", data=Night,
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+)
+Efxplot(list(r.inla.global.night2))
 #Model Selection
-NightList <- list(control.night=r.inla.control.night,habitat.night=r.inla.habitat.night,human.night=r.inla.human.night,global.night=r.inla.global.night)
+NightList <- list(control.night=r.inla.control.night,habitat.night=r.inla.habitat.night,human.night=r.inla.human.night,global.night=r.inla.global.night, global.night2=r.inla.global.night2)
 NightTable <- INLA.model.sel(NightList)
 
 
@@ -627,8 +657,18 @@ r.inla.global.cre <- inla(formula.global, family ="Poisson", data=Cre,
 )
 
 Efxplot(list(r.inla.global.cre))
+
+#global2.cre
+r.inla.global2.cre <- inla(formula.global.2, family ="Poisson", data=Cre,
+                          control.fixed = list(
+                            mean = mean.beta,
+                            prec = list(default = prec.beta)
+                          ),control.compute = list(dic = TRUE, waic = TRUE)
+)
+
+Efxplot(list(r.inla.global2.cre))
 #Model Selection
-CreList <- list(control.cre=r.inla.control.cre,habitat.cre=r.inla.habitat.cre,human.cre=r.inla.human.cre,global.cre=r.inla.global.cre)
+CreList <- list(control.cre=r.inla.control.cre,habitat.cre=r.inla.habitat.cre,human.cre=r.inla.human.cre,global.cre=r.inla.global.cre, global2=r.inla.global2.cre)
 CreTable <- INLA.model.sel(CreList)
 
 ####################scrap############################
@@ -665,6 +705,7 @@ cover = factor("grassland",
 NightCase <- Night[Night$case== 1,]
 DayCase <- Day[Day$case== 1,]
 ggplot(DayCase, aes(x=sl_, y=log_sl_)) + geom_point()
+tawtf <- RndSteps4[,c("cos_ta_","ta_")]
 ###################################################################
 #functions#########################################################
 ###################################################################

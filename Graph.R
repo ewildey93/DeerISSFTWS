@@ -209,13 +209,13 @@ Efxplot2 <- function(ModelList,
   scale_colour_manual(values=cbbPalette)
 
 
-Efxplot2(r.inla.global)
+GraphGlobal <- Efxplot2(r.inla.global.2)
 cbbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 # To use for line and point colors, add
 scale_colour_manual(values=cbPalette)
 
 
-GraphGlobal <- GraphGlobal[-10,]
+GraphGlobal <- GraphGlobal[-3,]
 ggplot(GraphGlobal,
        aes(x = as.factor(Factor),
            y = Estimate,
@@ -231,7 +231,7 @@ ggplot(GraphGlobal,
                 width = 0,show.legend=F,
                 position = position_dodge(w = 0.5)) +
   geom_point(position = position_dodge(w = 0.5), size = 1) +
-  scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Log Step Length','Cosine Turning Angle','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Shrub','Developed')) +
+  scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Step Length x Rolling Avg' ,'Rolling Avg x Forest','Cosine Turning Angle','Log Step Length','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
   ggtitle("Posterior Beta Estimates for Global Model") +
   theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
 
@@ -240,7 +240,7 @@ ggplot(GraphGlobal,
 #Day and Night
 DayNightList <- list(Day=r.inla.global.day, Night=r.inla.global.night)
 DayNightGraph <- Efxplot2(DayNightList)
-DayNightGraph <- DayNightGraph[c(-10,-21),]
+DayNightGraph <- DayNightGraph[c(-8,-20),]
 position <- ifelse(length(unique(DayNightGraph$Model))  ==  1, "none", "right")
 
 ggplot(DayNightGraph,
@@ -265,7 +265,7 @@ ggplot(DayNightGraph,
                 width = 0,
                 position = position_dodge(w = 0.5)) +
   geom_point(position = position_dodge(w = 0.5), size = 1) +
-  #scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Log Step Length','Cosine Turning Angle','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Shrub','Developed')) +
+  scale_x_discrete(labels = c("Log Step Length x Rolling Avg","Step Length x Rolling Avg",'Log Step Length','Cosine Turning Angle','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
   ggtitle("Posterior Beta Estimates for Day and Night Models") +
   labs(color= "Legend") +
   scale_colour_manual(values= cbbPalette) +
@@ -291,3 +291,30 @@ newobs$forest<-ifelse(RndSteps4$lc %in% c(41,42), 1, 0)
 newobs$shrub<-ifelse(RndSteps4$lc %in% c(52), 1, 0)
 newobs$herb <- ifelse(RndSteps4$lc %in% c(71,81,82), 1, 0)
 newobs$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)
+
+#########################################################################################
+#Day Stp Length Graph
+# Low elevation step-length distribution
+low_sl <- update_gamma(
+  dist = m4$sl_,
+  beta_sl = m4$model$coefficients["sl_"] +
+    -2 * m4$model$coefficients["sl_:elevation_start"],
+  beta_log_sl = m4$model$coefficients["log_sl_"] +
+    -2 * m4$model$coefficients["log_sl_:elevation_start"])
+
+# Medium elevation step-length distribution
+med_sl <- update_gamma(
+  dist = m4$sl_,
+  beta_sl = m4$model$coefficients["sl_"] +
+    0 * m4$model$coefficients["sl_:elevation_start"],
+  beta_log_sl = m4$model$coefficients["log_sl_"] +
+    0 * m4$model$coefficients["log_sl_:elevation_start"])
+
+# Wet step-length distribution
+hi_sl <- update_gamma(
+  dist = m4$sl_,
+  beta_sl = m4$model$coefficients["sl_"] +
+    2 * m4$model$coefficients["sl_:elevation_start"],
+  beta_log_sl = m4$model$coefficients["log_sl_"] +
+    2 * m4$model$coefficients["log_sl_:elevation_start"])
+
