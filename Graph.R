@@ -265,8 +265,29 @@ ggplot(DayNightGraph,
                 width = 0,
                 position = position_dodge(w = 0.5)) +
   geom_point(position = position_dodge(w = 0.5), size = 1) +
-  scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Log Step Length','Cosine Turning Angle','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Shrub','Developed')) +
+  #scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Log Step Length','Cosine Turning Angle','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Shrub','Developed')) +
   ggtitle("Posterior Beta Estimates for Day and Night Models") +
   labs(color= "Legend") +
   scale_colour_manual(values= cbbPalette) +
   theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
+###################################################################################
+Day2 <- Day[,c(2,4,5,7,30,37,38)]
+seq <- rep(g$round, times=9)
+#sl_
+x <- rep(g$`RndSteps5$x`, times=9)
+newobs <- data.frame(sl_=0,log_sl_=0,cos_ta_=0,x=x,UnscaleDist=seq,Stratum=seq(424:792),case=NA,ANIMAL_ID1=rep(1:9, each=41))
+newsobs <- newobs[order(newobs$ANIMAL_ID1,newobs$x),]
+
+#log_sl_
+range(Night$sl_)
+range(Night$log_sl_)
+newobs <- data.frame(sl_=, log_sl_=,cos_ta=mean(Night$cos_ta_),
+                     x=mean(Night$x),RA=mean(Night$RA),TRI=mean(Night$TRI),
+                     lc=c(41,22,52,71,90))
+                     
+                      
+newobs$developed<-ifelse(RndSteps4$lc %in% c(21,22,23,24), 1, 0) #This is call dummy code 
+newobs$forest<-ifelse(RndSteps4$lc %in% c(41,42), 1, 0)
+newobs$shrub<-ifelse(RndSteps4$lc %in% c(52), 1, 0)
+newobs$herb <- ifelse(RndSteps4$lc %in% c(71,81,82), 1, 0)
+newobs$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)

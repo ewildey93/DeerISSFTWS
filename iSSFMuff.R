@@ -369,12 +369,39 @@ r.inla.global <- inla(formula.global, family ="Poisson", data=RndSteps5,
                      ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 GlobalEfx <- Efxplot(list(r.inla.global))
+#global2
+formula.global.2 <- case ~ -1 +
+  #habitat
+  developed+shrub+herb+wetlands+scale(TRI)+
+  #human
+  x+
+  #movement kernel    
+  sl_ + cos_ta_ + sl_*RA +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
+  f(ANIMAL_ID1,x,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID2,forest,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID3,shrub,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
+  f(ANIMAL_ID4,herb,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
+  f(ANIMAL_ID5,wetlands,values=1:9,model="iid",
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
+
+r.inla.global.2 <- inla(formula.global.2, family ="Poisson", data=RndSteps5,
+                      control.fixed = list(
+                        mean = mean.beta,
+                        prec = list(default = prec.beta)
+                      ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+)
+
 
 #################################################################
 #####################Model Selection#############################
 #################################################################
 #see function at bottom
-ModelList <- list(control=r.inla.control, habitat=r.inla.habitat,human=r.inla.human, global=r.inla.global)
+ModelList <- list(control=r.inla.control, habitat=r.inla.habitat,human=r.inla.human, global=r.inla.global,global2=r.inla.global.2)
 ModelSelTable <- INLA.model.sel(ModelList)
 saveRDS(ModelSelTable, "./ModelSelTable.rds")
 write.csv(ModelSelTable, "./ModelSelTable.csv")
@@ -619,10 +646,13 @@ which(is.na(CoVs$RA))
 what <- RndSteps4[9787:10122,]
 which(table(RndSteps4$step_id_) != 10 )
 table(Day2$ANIMAL_ID1)
-hist(Day2$sl_)
-hist(Day2$log_sl_)
+hist(Night$sl_)
+hist(Night$log_sl_)
 hist(Day2$cos_ta_)
 hist(RndSteps4$x)
+boxplot(Night$sl_)
+boxplot(Night$log_sl_)
+Outlier <- Night[Night$sl_ > 10,]
 scalex <- cbind.data.frame(RndSteps4$x,RndSteps5$x)
 scalex$round <- round(scalex$`RndSteps4$x`)
 e <- scalex[scalex$round %in% seq,]
@@ -630,6 +660,11 @@ table(e$round)
 range(RndSteps4$x)
 f <- scalex[as.numeric(scalex$`RndSteps4$x`) < 2650,]
 g <- e%>%distinct(round, .keep_all = T)
+cover = factor("grassland",
+               levels = c("grassland", "forest", "wetland"))
+NightCase <- Night[Night$case== 1,]
+DayCase <- Day[Day$case== 1,]
+ggplot(DayCase, aes(x=sl_, y=log_sl_)) + geom_point()
 ###################################################################
 #functions#########################################################
 ###################################################################
