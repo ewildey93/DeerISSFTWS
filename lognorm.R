@@ -1,100 +1,52 @@
-library(sp)
-library(sf)
-library(raster)
-library(rgdal)
-library(adehabitatHR)
-library(adehabitatLT)
-library(dplyr)
-library(data.table)
-library(Hmisc)
-library(ggplot2)
-library(tidyverse)
-library(data.table)
-library(amt)
-library(zoo)
-library(INLA)
-library(ggregplot)
-library(magrittr)
-setwd("C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS")
+library(fitdistrplus)
+library(logspline)
+install.packages("fdrtool")              # Install & load fdrtool package
+library("fdrtool")
+StepsDF <- StepsDF %>% 
+  mutate(sl_ = replace(sl_, sl_==0, 1))
+par(mfrow=c(1,2))
+descdist(StepsDF$sl_, discrete = FALSE)
+descdist(k$sl_, discrete = FALSE)
 
-filenames <- list.files(path = "C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS/Data",pattern = ".csv",full.names = TRUE)
-objectnames <- list.files(path = "C:/Users/eliwi/OneDrive/Documents/R/DeerISSFTWS/Data",pattern = ".csv",full.names = FALSE)
-for(i in 1:length(filenames)) assign(objectnames[i], read.csv(filenames[i]))
-Deer <- do.call("list", mget(objectnames))
-#Deer <- read.csv("C:/Users/eliwi/OneDrive/Documents/Salida/DeerM4940.csv")
-Deer <- lapply(Deer, select, c(4,5,6,7,11,15,16,20))
-#colnames(Deer)[4] <- 'DateTime'
-colnames <- c('DateTime','Lat','Long','hdop','alt','nsats','vdop','temp')
-Deer <- lapply(Deer, setNames, colnames) 
-#Deer$DateTime <- as.POSIXct(Deer$DateTime,format= '%Y-%m-%d %H:%M:%S', tz= 'GMT')
-listnames <- grep(pattern = ".csv",x = ls(), value = TRUE)
-listnames <- gsub(pattern = ".csv", replacement = '',x = listnames)
-#listnames <- gsub(pattern = "_3.31", replacement = '',x = listnames)
-Deer <- lapply(Deer, function (x) {x$DateTime <- as.POSIXct(x$DateTime,format= '%Y-%m-%d %H:%M:%S', tz="GMT")
-x <- x[x$Lat > 0,]
-x <- x[x$hdop < 10 & x$vdop < 10 & x$nsats >2,];
-x})
-Deer <- lapply(Deer, function (x) {attributes(x$DateTime)$tzone <- "America/Denver"
-;x})
-names(Deer) <- listnames
-Deer <- Map(cbind, Deer, ID = names(Deer))
-Deer[["F49862"]] <- Deer[["F49862"]][!(Deer[["F49862"]]$DateTime %in% F49862out$DateTime),]
-Deer <- Deer[-4]
-saveRDS(Deer, file="./DeerList.rds")
-readRDS("./DeerList.rds")
-######################################################################
-#str(Deer)
-#attributes(Deer$DateTime)$tzone <- "America/Denver"
-#attributes(Deer$DateTime)$tzone
-#Deer <- subset(Deer, lat > 0)
-######################################################################
-Deer2 <- rbindlist(Deer)
-str(Deer2)
-#Deer2 <- Deer2[c(-1253:-1595,-1762),]
+fit.gamma <- fitdist(StepsDF$sl_, "gamma")
+fit.exp <- fitdist(StepsDF$sl_, "exp")
+fit.lognorm <- fitdist(StepsDF$sl_, "lnorm")
+fit.weibull <- fitdist(StepsDF$sl_, "weibull")
+fit.halfnorm <- fitdist(StepsDF$sl_, "halfnorm")
+fit.gamma <- fitdist(k$sl_, "gamma")
+fit.exp <- fitdist(k$sl_, "exp")
+fit.lognorm <- fitdist(k$sl_, "lnorm")
+fit.weibull <- fitdist(k$sl_, "weibull")
+fit.halfnorm <- dhalfnorm(StepsDF$sl_, sd=432) 
+plot(fit.halfnorm) 
+
+plot(fit.gamma)
+plot(fit.exp)
+plot(fit.lognorm)
+plot(fit.weibull)
 
 
-sf_deer<-st_as_sf(Deer2, coords=c("Long", "Lat"), crs=CRS("+init=epsg:4326"))
-sf_deer<-st_transform(sf_deer, CRS("+init=epsg:32613"))
-sf_deer <- cbind(sf_deer, st_coordinates(sf_deer))
-Deer2 <- cbind(Deer2, st_coordinates(sf_deer))
-Deer2 <- split(x = Deer2, f=Deer2$ID)
-saveRDS(Deer2, file="./DeerList2.rds")
-readRDS("./DeerList2.rds")
-#uneven no. of observations per animal not a problem in Muff et al. 2020 example
-#################################################################################
-# We can format our data as a 'track_*' object using 'make_track()'.
-trkList <- lapply(Deer2, function (x) make_track(x, X, Y, DateTime, id = ID, crs = CRS("+init=EPSG:32613")))
-#trkA <- trk %>% group_by(id)%>%nest()
 
-#don't need to break into behavioral states using HMM because of coarse interval
-# We can do that with the function 'steps()'.
-#trk1 <- trk %>% nest(-'id')
-trk1 <- lapply(trkList, function (x) track_resample(x,rate=hours(4), tolerance=minutes(36)))
-          #tolerance recommended to be less than 20% of interval https://github.com/ewildey93/Statistical-Methods-Seminar-Series/blob/main/avgar-smith_issa/Q_and_A.md
-trk2 <- lapply(trk1, function (x)filter_min_n_burst(x,min_n=3))         
-steps <- lapply(trk2, function (x) steps_by_burst(x))
-saveRDS(steps, "./DeerSteps.rds")
+
+fit.gamma$aic
+fit.exp$aic
+fit.lognorm$aic
+fit.weibull$aic
+
+k <- StepsDF[StepsDF$sl_ > 10 & StepsDF$sl_ < 2000,]
+kdist <- fit_distr(k$sl_, 'gamma')
+
+hnrom <- make_hnorm_distr(sd = sqrt(1/length(StepsDF$sl_) * sum(StepsDF$sl_^2)))
+####################################################################################
 steps <- readRDS('./DeerSteps.rds')
-
-max <- max(sapply(steps, function(x) as.character(max(x$t2_, na.rm=TRUE))))
-min <- min(sapply(steps, function(x) as.character(min(x$t2_, na.rm=TRUE))))
-min <- as.POSIXct(min,format= '%Y-%m-%d %H:%M:%S', tz="America/Denver")
-max <- as.POSIXct(max,format= '%Y-%m-%d %H:%M:%S', tz="America/Denver")
-min <- min-5*60*60
-max <- max
-min <- as.POSIXct(format(round(min, units="hours"), format="%Y-%m-%d %H:%M"),tz="America/Denver")
-max <- as.POSIXct(format(round(max, units="hours"), format="%Y-%m-%d %H:%M"),tz="America/Denver")
-min <- "2021-04-05 17:00:00 MDT"
-max <- "2022-10-09 11:00:00 MDT"
-
-#####################################################################################
-#####################################################################################
+steps <- lapply(steps, function (x) filter(x, sl_ > 10 & sl_ < 2000))
+StepsDF <- bind_rows(steps, .id="column_label")
 # Step 1. Sample ----
-RndSteps <- lapply(steps, function (x) random_steps(x, n_control = 20))
+RndSteps <- lapply(steps, function (x) random_steps(x, n_control = 20,sl_distr= fit_distr(StepsDF$sl_, "lnorm")))
 
 #distributions fir using RndSteps4 df so theres one distribution instead of 10
 tadist <- lapply(RndSteps, function (x) fit_distr(x$ta_, "vonmises"))
-gamma <-  fit_distr(StepsDF$sl_, "gamma")
+sldist <- fit_distr(StepsDF$sl_, "lnorm")
 table(RndSteps4$sl_ == 0)
 StepsDF <- bind_rows(steps, .id="column_label")
 # Since we used the gamma distribution as our tentative step-length
@@ -154,10 +106,10 @@ colnames(RA)[1] <- "RoundDate"
 #extract time covariates
 RndSteps3 <- lapply(RndSteps2, function (x) mutate (x, RoundDate= as.POSIXct(format(round(t2_, units="hours"), format="%Y-%m-%d %H:%M:%S"),tz="America/Denver")))
 RndSteps3 <- lapply(RndSteps3, function (x) left_join(x,RA, by="RoundDate", all.y=F, all.x=T))
-saveRDS(RndSteps3, "./RndSteps3.rds")
+saveRDS(RndSteps3, "./RndSteps3LogNorm.rds")
 
 #landcover
-lc <- raster("./CoVs/NLCD_2019_Land_Cover_L48_20210604_JbsuwO6GkIW9V4xHbi6d.tiff")
+lc <- raster("./CoVs/NLCD_2019_Land_Cover_L48_20210604_62mBU22gl5MX5ewB6nV7.tiff")
 projection(lc)
 RndSteps4 <- bind_rows(RndSteps3, .id="column_label")
 RndSteps4SF<-st_as_sf(RndSteps4, coords=c("x2_", "y2_"), crs=CRS("+init=epsg:32613"))
@@ -171,15 +123,16 @@ RndSteps4$herb <- ifelse(RndSteps4$lc %in% c(71,81,82), 1, 0)
 RndSteps4$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)
 table(is.na(RndSteps4$lc))
 saveRDS(RndSteps4, "./RndSteps4.rds")
-
+RndSteps4 <- RndSteps4%>%filter(lc != 11 & !is.na(lc))
 #TOD recode
 RndSteps4$tod_end_ <- recode_factor(RndSteps4$tod_end_,dusk = 'crepuscular',dawn='crepuscular')
-saveRDS(RndSteps4, "./RndSteps4.rds")
+saveRDS(RndSteps4, "./RndSteps4lognorm.rds")
 
 #TRI
-TRI <- raster("C:/Users/eliwi/OneDrive/Documents/Salida/GeospatialLayers/TRI10.26.tif")
+TRI <- raster("C:/Users/eliwi/OneDrive/Documents/Salida/GeospatialLayers/TRI11.5.tif")
 RndSteps4$TRI<-raster::extract(TRI, RndSteps4SF)
-saveRDS(RndSteps4, "./RndSteps4.rds")
+table(is.na(RndSteps4$TRI))
+saveRDS(RndSteps4, "./RndSteps4lognorm.rds")
 RndSteps4 <- readRDS("./RndSteps4.rds")
 
 #make combo categories
@@ -205,7 +158,7 @@ RndSteps4 <- RndSteps4 %>%                               # Replacing values
   mutate(Stratum = as.integer(Stratam))
 RndSteps4$Stratum <- as.factor(RndSteps4$Stratum)
 class(RndSteps4)
-saveRDS(RndSteps4, "./RndSteps4.rds")
+saveRDS(RndSteps4, "./RndSteps4lognorm.rds")
 
 #add variable for daily traffic
 Daily <- read.csv("./CoVs/TRAFx Daily totals (2021-03-31 to 2022-08-14).csv")
@@ -218,7 +171,7 @@ RndSteps4 <- left_join(x = RndSteps4, y=Daily2, by="Date", all.x=T)
 RndSteps4 <- RndSteps4[-(9787:10122),]
 RndSteps4 <- RndSteps4 %>% 
   mutate(sl_ = replace(sl_, sl_==0, 1))
-saveRDS(RndSteps4, "./RndSteps4.rds")
+saveRDS(RndSteps4, "./RndSteps4lognorm.rds")
 RndSteps4 <- readRDS("./RndSteps4.rds")
 hist(RndSteps4$log_sl_)
 hist(RndSteps4$sl_)
@@ -249,12 +202,12 @@ hist(RndSteps5$x)
 hist(RndSteps5$RA)
 RndSteps5 <- RndSteps4 %>% 
   mutate(sl_ = replace(sl_, sl_==0, 1))
-RndSteps5 <- mutate(RndSteps5, log_sl_= log(sl_))
+RndSteps5 <- mutate(RndSteps4, log_sl_= log(sl_))
 RndSteps5$sl_ <- scale(RndSteps5$sl_)
 RndSteps5$RA <- scale(RndSteps5$RA)
 RndSteps5$x <- scale(RndSteps5$x)
 RndSteps5$log_sl_ <- scale(RndSteps5$log_sl_)
-saveRDS(RndSteps5, "./RndSteps5.rds")
+saveRDS(RndSteps5, "./RndSteps5lognorm.rds")
 RndSteps5 <- readRDS("./RndSteps5.rds")
 ###########################################################################
 ####                           Modelling-iSSF         #####################
@@ -265,7 +218,7 @@ prec.beta <- 1e-4
 
 RndSteps5$ANIMAL_ID <- as.numeric(as.factor(RndSteps5$column_label))
 RndSteps5$case <- as.integer(as.logical(RndSteps5$case_))
-saveRDS(RndSteps5, "./RndSteps5.rds")
+saveRDS(RndSteps5, "./RndSteps5lognorm.rds")
 #To fit the model with random slopes in INLA, we need to generate new (but identical) variables of individual ID (ID cannot be used multiple times in the model formula):
 RndSteps5$ANIMAL_ID1 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID2 <- RndSteps5$ANIMAL_ID
@@ -276,18 +229,19 @@ RndSteps5$ANIMAL_ID6 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID7 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID8 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID9 <- RndSteps5$ANIMAL_ID
-saveRDS(RndSteps5, "./RndSteps5.rds")
+RndSteps5$logsl2 <- RndSteps5$log_sl_^2
+saveRDS(RndSteps5, "./RndSteps5lognorm.rds")
 #Control model
 formula.control <- case ~ -1 + 
-                    #movement kernel
-                    sl_ + cos_ta_ + log_sl_ + log_sl_*cos_ta_ +
-                    f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-4),fixed=T)))
+  #movement kernel
+  logsl2 + cos_ta_ + log_sl_ + log_sl_*cos_ta_ +
+  f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-4),fixed=T)))
 
 r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
-                     control.fixed = list(
-                       mean = mean.beta,
-                       prec = list(default = prec.beta)
-                     ),control.compute = list(cpo = TRUE,dic = TRUE, waic = TRUE)
+                       control.fixed = list(
+                         mean = mean.beta,
+                         prec = list(default = prec.beta)
+                       ),control.compute = list(cpo = TRUE,dic = TRUE, waic = TRUE)
 )
 
 r.inla.control$summary.fixed
@@ -309,7 +263,7 @@ c(WAIC=r.inla.control$waic$waic, DIC=r.inla.control$dic$dic)
 formula.habitat <- case ~ -1 +
   developed+shrub+herb+wetlands+scale(TRI)+
   #movement kernel    
-  sl_ + cos_ta_ + log_sl_ + log_sl_*cos_ta_ +
+  logsl2 + cos_ta_ + log_sl_ + log_sl_*cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,forest,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) + 
@@ -338,17 +292,17 @@ Efxplot(list(r.inla.habitat))
 formula.human <- case ~ -1 +
   x*RA+
   #movement kernel    
-  sl_ + cos_ta_ + log_sl_+ log_sl_*cos_ta_ +
+  logsl2 + cos_ta_ + log_sl_+ log_sl_*cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
 
 
 r.inla.human <- inla(formula.human, family ="Poisson", data=RndSteps5,
-                       control.fixed = list(
-                         mean = mean.beta,
-                         prec = list(default = prec.beta)
-                       ),control.compute = list(cpo = TRUE,dic = TRUE, waic = TRUE)
+                     control.fixed = list(
+                       mean = mean.beta,
+                       prec = list(default = prec.beta)
+                     ),control.compute = list(cpo = TRUE,dic = TRUE, waic = TRUE)
 )
 
 r.inla.human$summary.fixed
@@ -362,7 +316,7 @@ formula.global <- case ~ -1 +
   #human
   x+
   #movement kernel    
-  sl_ *RA+ cos_ta_ + log_sl_*RA + log_sl_*cos_ta_ +
+  logsl2 *RA+ cos_ta_ + log_sl_*RA + log_sl_*cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
@@ -376,13 +330,13 @@ formula.global <- case ~ -1 +
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) 
 
 r.inla.global <- inla(formula.global, family ="Poisson", data=RndSteps5,
-                     control.fixed = list(
-                       mean = mean.beta,
-                       prec = list(default = prec.beta)
-                     ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+                      control.fixed = list(
+                        mean = mean.beta,
+                        prec = list(default = prec.beta)
+                      ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 Efxplot(list(r.inla.global))
-
+r.inla.human$summary.fixed
 #global2
 formula.global.2 <- case ~ -1 +
   #habitat
@@ -390,7 +344,7 @@ formula.global.2 <- case ~ -1 +
   #human
   x+
   #movement kernel    
-  sl_ * RA  + log_sl_*RA +cos_ta_ + log_sl_*cos_ta_ +
+  logsl2 * RA  + log_sl_*RA +cos_ta_ + log_sl_*cos_ta_ +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
@@ -405,10 +359,10 @@ formula.global.2 <- case ~ -1 +
 
 
 r.inla.global.2 <- inla(formula.global.2, family ="Poisson", data=RndSteps5,
-                      control.fixed = list(
-                        mean = mean.beta,
-                        prec = list(default = prec.beta)
-                      ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+                        control.fixed = list(
+                          mean = mean.beta,
+                          prec = list(default = prec.beta)
+                        ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 
 Efxplot(list(r.inla.global.2))
@@ -462,10 +416,10 @@ formula.habitat.day <- case ~ -1 +
 
 
 r.inla.habitat.day <- inla(formula.habitat, family ="Poisson", data=Day,
-                       control.fixed = list(
-                         mean = mean.beta,
-                         prec = list(default = prec.beta)
-                       ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat.day$summary.fixed
@@ -520,20 +474,20 @@ formula.global.day <- case ~ -1 +
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
 
 r.inla.global.day <- inla(formula.global, family ="Poisson", data=Day,
-                      control.fixed = list(
-                        mean = mean.beta,
-                        prec = list(default = prec.beta)
-                      ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+                          control.fixed = list(
+                            mean = mean.beta,
+                            prec = list(default = prec.beta)
+                          ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 Efxplot(list(r.inla.global.day))
 r.inla.global.day$summary.fixed
 
 #global 2 day
 r.inla.global.day2 <- inla(formula.global.2, family ="Poisson", data=Day,
-                          control.fixed = list(
-                            mean = mean.beta,
-                            prec = list(default = prec.beta)
-                          ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 Efxplot(list(r.inla.global.day2))
 #Model selection
@@ -561,10 +515,10 @@ formula.habitat.night <- case ~ -1 +
 
 
 r.inla.habitat.night <- inla(formula.habitat, family ="Poisson", data=Night,
-                           control.fixed = list(
-                             mean = mean.beta,
-                             prec = list(default = prec.beta)
-                           ),control.compute = list(dic = TRUE, waic = TRUE)
+                             control.fixed = list(
+                               mean = mean.beta,
+                               prec = list(default = prec.beta)
+                             ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 r.inla.habitat.night$summary.fixed
@@ -581,30 +535,30 @@ r.inla.control.night <- inla(formula.control, family ="Poisson", data=Night,
 
 #human night
 r.inla.human.night <- inla(formula.human, family ="Poisson", data=Night,
-                             control.fixed = list(
-                               mean = mean.beta,
-                               prec = list(default = prec.beta)
-                             ),control.compute = list(dic = TRUE, waic = TRUE)
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 #global night
 formula.global
 
 r.inla.global.night <- inla(formula.global, family ="Poisson", data=Night,
-                             control.fixed = list(
-                               mean = mean.beta,
-                               prec = list(default = prec.beta)
-                             ),control.compute = list(dic = TRUE, waic = TRUE)
+                            control.fixed = list(
+                              mean = mean.beta,
+                              prec = list(default = prec.beta)
+                            ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 Efxplot(list(r.inla.global.night))
 
 #global 2 night
 formula.global.2
 r.inla.global.night2 <- inla(formula.global.2, family ="Poisson", data=Night,
-                           control.fixed = list(
-                             mean = mean.beta,
-                             prec = list(default = prec.beta)
-                           ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+                             control.fixed = list(
+                               mean = mean.beta,
+                               prec = list(default = prec.beta)
+                             ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
 )
 Efxplot(list(r.inla.global.night2))
 #Model Selection
@@ -652,28 +606,28 @@ r.inla.control.cre <- inla(formula.control, family ="Poisson", data=Cre,
 
 #human.cre
 r.inla.human.cre <- inla(formula.human, family ="Poisson", data=Cre,
-                           control.fixed = list(
-                             mean = mean.beta,
-                             prec = list(default = prec.beta)
-                           ),control.compute = list(dic = TRUE, waic = TRUE)
+                         control.fixed = list(
+                           mean = mean.beta,
+                           prec = list(default = prec.beta)
+                         ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 Efxplot(list(r.inla.human.cre))
 #global.cre
 r.inla.global.cre <- inla(formula.global, family ="Poisson", data=Cre,
-                           control.fixed = list(
-                             mean = mean.beta,
-                             prec = list(default = prec.beta)
-                           ),control.compute = list(dic = TRUE, waic = TRUE)
+                          control.fixed = list(
+                            mean = mean.beta,
+                            prec = list(default = prec.beta)
+                          ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 Efxplot(list(r.inla.global.cre))
 
 #global2.cre
 r.inla.global2.cre <- inla(formula.global.2, family ="Poisson", data=Cre,
-                          control.fixed = list(
-                            mean = mean.beta,
-                            prec = list(default = prec.beta)
-                          ),control.compute = list(dic = TRUE, waic = TRUE)
+                           control.fixed = list(
+                             mean = mean.beta,
+                             prec = list(default = prec.beta)
+                           ),control.compute = list(dic = TRUE, waic = TRUE)
 )
 
 Efxplot(list(r.inla.global2.cre))

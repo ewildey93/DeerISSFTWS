@@ -295,26 +295,138 @@ newobs$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)
 #########################################################################################
 #Day Stp Length Graph
 # Low elevation step-length distribution
+low_sl <-  update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = 0.008821132 +
+    -2 * 0.046916729,
+  beta_log_sl =  -0.038914849 +
+    -2 * 0.513143550)
+
+# Medium elevation step-length distribution
+med_sl <- update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = 0.008821132 +
+    0 * 0.046916729,
+  beta_log_sl =  -0.038914849 +
+    0 * 0.513143550)
+
+# Wet step-length distribution
+hi_sl <- update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = 0.008821132 +
+    2 * 0.046916729,
+  beta_log_sl =  -0.038914849 +
+    2 * 0.513143550)
+
+#data.frame for plotting
+plot_sl <- data.frame(x = rep(NA, 100))
+
+# x-axis is sequence of possible step lengths
+plot_sl$x <- seq(from = 0, to = 2000, length.out = 100)
+
+# y-axis is the probability density under the given gamma distribution
+# Forest
+plot_sl$low<- dlnorm(x = plot_sl$x, 
+                      meanlog=low_sl$params$meanlog,
+                      sdlog = low_sl$params$sdlog)
+# Grass
+plot_sl$medium <- dlnorm(x = plot_sl$x, 
+                         meanlog=med_sl$params$meanlog,
+                         sdlog = med_sl$params$sdlog)
+# Wet
+plot_sl$high <- dlnorm(x = plot_sl$x, 
+                       meanlog=hi_sl$params$meanlog,
+                       sdlog = hi_sl$params$sdlog)
+
+# Pivot from wide to long data
+plot_sl <- plot_sl %>% 
+  pivot_longer(cols = -x)
+
+# Plot
+p1 <- ggplot(plot_sl, aes(x = x, y = value, color = factor(name))) +
+  geom_line(size = 1) +
+  scale_color_manual(name = "Rolling Avg",
+                     breaks = c("low", "medium", "high"),
+                     values = c("navyblue", "gray50", "firebrick")) +
+  xlab("Step Length (m)") +
+  ylab("Probability Density") +
+  theme_bw() 
+p1
+
+
+#ta day
+# low turn-angle distribution
+low_ta <- update_vonmises(
+  dist = m4$ta_,
+  beta_cos_ta = m4$model$coefficients["cos_ta_"] +
+    -2 * m4$model$coefficients["cos_ta_:elevation_start"])
+
+# med turn-angle distribution
+med_ta <- update_vonmises(
+  dist = m4$ta_,
+  beta_cos_ta = m4$model$coefficients["cos_ta_"] +
+    1 * m4$model$coefficients["cos_ta_:elevation_start"])
+
+# hi turn-angle distribution
+hi_ta <- update_vonmises(
+  dist = m4$ta_,
+  beta_cos_ta = m4$model$coefficients["cos_ta_"] +
+    2 * m4$model$coefficients["cos_ta_:elevation_start"])
+
+#########################GAMMA#############################################
+# Low elevation step-length distribution
 low_sl <- update_gamma(
-  dist = m4$sl_,
-  beta_sl = m4$model$coefficients["sl_"] +
-    -2 * m4$model$coefficients["sl_:elevation_start"],
-  beta_log_sl = m4$model$coefficients["log_sl_"] +
-    -2 * m4$model$coefficients["log_sl_:elevation_start"])
+  dist = gamma,
+  beta_sl = 0.01801359 +
+    -0.5 * 0.02914068,
+  beta_log_sl = 0.02137780 +
+    -0.5 * -0.09037506)
 
 # Medium elevation step-length distribution
 med_sl <- update_gamma(
-  dist = m4$sl_,
-  beta_sl = m4$model$coefficients["sl_"] +
-    0 * m4$model$coefficients["sl_:elevation_start"],
-  beta_log_sl = m4$model$coefficients["log_sl_"] +
-    0 * m4$model$coefficients["log_sl_:elevation_start"])
+  dist = gamma,
+  beta_sl = 0.01801359 +
+    1 * 0.02914068,
+  beta_log_sl = 0.02137780 +
+    1 * -0.09037506)
 
 # Wet step-length distribution
 hi_sl <- update_gamma(
-  dist = m4$sl_,
-  beta_sl = m4$model$coefficients["sl_"] +
-    2 * m4$model$coefficients["sl_:elevation_start"],
-  beta_log_sl = m4$model$coefficients["log_sl_"] +
-    2 * m4$model$coefficients["log_sl_:elevation_start"])
+  dist = gamma,
+  beta_sl = 0.01801359 +
+    3 * 0.02914068,
+  beta_log_sl = 0.02137780 +
+    3 * -0.09037506)
+plot_sl <- data.frame(x = rep(NA, 100))
 
+# x-axis is sequence of possible step lengths
+plot_sl$x <- seq(from = 0, to = 400, length.out = 100)
+
+# y-axis is the probability density under the given gamma distribution
+# Forest
+plot_sl$low <- dgamma(x = plot_sl$x, 
+                      shape = low_sl$params$shape,
+                      scale = low_sl$params$scale)
+# Grass
+plot_sl$medium <- dgamma(x = plot_sl$x, 
+                         shape = med_sl$params$shape,
+                         scale = med_sl$params$scale)
+# Wet
+plot_sl$high <- dgamma(x = plot_sl$x, 
+                       shape = hi_sl$params$shape,
+                       scale = hi_sl$params$scale)
+
+# Pivot from wide to long data
+plot_sl <- plot_sl %>% 
+  pivot_longer(cols = -x)
+
+# Plot
+p1 <- ggplot(plot_sl, aes(x = x, y = value, color = factor(name))) +
+  geom_line(size = 1) +
+  scale_color_manual(name = "Elevation",
+                     breaks = c("low", "medium", "high"),
+                     values = c("navyblue", "gray50", "firebrick")) +
+  xlab("Step Length (m)") +
+  ylab("Probability Density") +
+  theme_bw() 
+p1
