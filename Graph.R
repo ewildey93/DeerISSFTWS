@@ -235,6 +235,27 @@ ggplot(GraphGlobal,
   ggtitle("Posterior Beta Estimates for Global Model") +
   theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
 
+#lognormal
+GraphGlobalLN <- Efxplot2(r.inla.global.2)
+GraphGlobalLN <- GraphGlobalLN[-3,]
+ggplot(GraphGlobalLN,
+       aes(x = as.factor(Factor),
+           y = Estimate,
+           alpha = SigAlpha)) +
+  geom_point(position = position_dodge(w = 0.5), size = 2) +
+  geom_hline(aes(yintercept = 0),lty = 2, colour="#56B4E9") + labs(x = NULL) + coord_flip() +
+  geom_text(aes(label = Sig, y = starloc),
+            position = position_dodge(w = 0.5),colour="#009E73",
+            show.legend = F, size=8) +
+  scale_alpha_manual(values = c(1, 1)) +
+  guides(alpha = "none") +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper, colour="#E69F00"),
+                width = 0,show.legend=F,
+                position = position_dodge(w = 0.5)) +
+  geom_point(position = position_dodge(w = 0.5), size = 1) +
+  scale_x_discrete(labels = c("Log Step Length x Turn Angle",'Log Step Length x Rolling Avg' ,'Log Step Length ^2 x Rolling Avg','Forest x Rolling Avg','Cosine Turning Angle','Log Step Length','Log Step Length ^2','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
+  ggtitle("Posterior Beta Estimates for Global Model") +
+  theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
 
 
 #Day and Night
@@ -270,6 +291,41 @@ ggplot(DayNightGraph,
   labs(color= "Legend") +
   scale_colour_manual(values= cbbPalette) +
   theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
+
+#Graph Day and Night LN
+cbbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+DayNightList <- list(Day=r.inla.global.day, Night=r.inla.global.night)
+DayNightGraph <- Efxplot2(DayNightList)
+DayNightGraph <- DayNightGraph[c(-8,-21),]
+position <- ifelse(length(unique(DayNightGraph$Model))  ==  1, "none", "right")
+
+ggplot(DayNightGraph,
+       aes(x = as.factor(Factor),
+           y = Estimate,
+           group = Model,
+           colour = Model,
+           alpha = SigAlpha)) +
+  geom_point(position = position_dodge(w = 0.5), size = 2) +
+  geom_errorbar(position = position_dodge(w = 0.5),
+                aes(ymin = Lower, ymax = Upper), width = 0, show.legend=T) +
+  geom_hline(aes(yintercept = 0),lty = 2) + labs(x = NULL) + coord_flip() +
+  theme(legend.position = position) +
+  geom_text(aes(label = Sig, y = starloc),
+            position = position_dodge(w = 0.5),
+            show.legend = F, size=8) +
+  scale_alpha_manual(values = c(1, 1)) +
+  guides(alpha = "none") +
+  geom_point(position = position_dodge(w = 0.5), size = 2,
+             alpha = 1) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper),
+                width = 0,
+                position = position_dodge(w = 0.5)) +
+  geom_point(position = position_dodge(w = 0.5), size = 1) +
+  scale_x_discrete(labels = c("Log Step Length x Turn Angle",'Log Step Length x Rolling Avg' ,'Log Step Length ^2 x Rolling Avg','Log Step Length','Cosine Turning Angle','Log Step Length ^2','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
+  ggtitle("Posterior Beta Estimates for Day and Night Models") +
+  labs(color= "Legend") +
+  scale_colour_manual(values= cbbPalette) +
+  theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
 ###################################################################################
 Day2 <- Day[,c(2,4,5,7,30,37,38)]
 seq <- rep(g$round, times=9)
@@ -293,30 +349,30 @@ newobs$herb <- ifelse(RndSteps4$lc %in% c(71,81,82), 1, 0)
 newobs$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)
 
 #########################################################################################
-#Day Stp Length Graph
+#Stp Length Graph
 # Low elevation step-length distribution
 low_sl <-  update_lnorm(
   dist = sldist,
-  beta_log_sl_sq = 0.008821132 +
-    -2 * 0.046916729,
-  beta_log_sl =  -0.038914849 +
-    -2 * 0.513143550)
+  beta_log_sl_sq = -0.037703838 +
+    -2 * -0.002481102,
+  beta_log_sl =  -0.009971792 +
+    -2 * 0.081020638)
 
 # Medium elevation step-length distribution
 med_sl <- update_lnorm(
   dist = sldist,
-  beta_log_sl_sq = 0.008821132 +
-    0 * 0.046916729,
-  beta_log_sl =  -0.038914849 +
-    0 * 0.513143550)
+  beta_log_sl_sq = -0.037703838 +
+    0 * -0.002481102,
+  beta_log_sl =  -0.009971792 +
+    0 * 0.081020638)
 
 # Wet step-length distribution
 hi_sl <- update_lnorm(
   dist = sldist,
-  beta_log_sl_sq = 0.008821132 +
-    2 * 0.046916729,
-  beta_log_sl =  -0.038914849 +
-    2 * 0.513143550)
+  beta_log_sl_sq = -0.037703838 +
+    2 * -0.002481102,
+  beta_log_sl =  -0.009971792 +
+    22 * 0.081020638)
 
 #data.frame for plotting
 plot_sl <- data.frame(x = rep(NA, 100))
@@ -352,6 +408,14 @@ p1 <- ggplot(plot_sl, aes(x = x, y = value, color = factor(name))) +
   ylab("Probability Density") +
   theme_bw() 
 p1
+
+#old coefs why are they different
+med_sl <- update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = 0.008821132 +
+    0 * 0.046916729,
+  beta_log_sl =  -0.038914849 +
+    0 * 0.513143550)
 
 
 #ta day

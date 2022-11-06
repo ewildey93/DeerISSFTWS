@@ -362,7 +362,7 @@ formula.global <- case ~ -1 +
   #human
   x+
   #movement kernel    
-  sl_ *RA+ cos_ta_ + log_sl_*RA + log_sl_*cos_ta_ +
+  sl_ *RA+ cos_ta_ + log_sl_*RA +
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
@@ -390,7 +390,7 @@ formula.global.2 <- case ~ -1 +
   #human
   x+
   #movement kernel    
-  sl_ * RA  + log_sl_*RA +cos_ta_ + log_sl_*cos_ta_ +
+  sl_ * RA  + log_sl_*RA +cos_ta_ + 
   f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-6),fixed=T))) +
   f(ANIMAL_ID1,x,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +

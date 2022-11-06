@@ -208,7 +208,7 @@ RndSteps5$RA <- scale(RndSteps5$RA)
 RndSteps5$x <- scale(RndSteps5$x)
 RndSteps5$log_sl_ <- scale(RndSteps5$log_sl_)
 saveRDS(RndSteps5, "./RndSteps5lognorm.rds")
-RndSteps5 <- readRDS("./RndSteps5.rds")
+RndSteps5 <- readRDS("./RndSteps5lognorm.rds")
 ###########################################################################
 ####                           Modelling-iSSF         #####################
 ###########################################################################
