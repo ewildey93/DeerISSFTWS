@@ -6,13 +6,13 @@ StepsDF <- StepsDF %>%
   mutate(sl_ = replace(sl_, sl_==0, 1))
 par(mfrow=c(1,2))
 descdist(StepsDF$sl_, discrete = FALSE)
-descdist(q, discrete = FALSE)
+descdist(RndSteps4$sl_, discrete = FALSE)
 q <- as.numeric(RndSteps5$sl_ * (z$'scaled:scale') + z$'scaled:center')
 z <- attributes(RndSteps5$sl_)
 
-fit.gamma <- fitdist(q, "gamma")
+fit.gamma <- fitdist(RndSteps4$sl_, "gamma")
 fit.exp <- fitdist(StepsDF$sl_, "exp")
-fit.lognorm <- fitdist(q, "lnorm")
+fit.lognorm <- fitdist(RndSteps4$sl_, "lnorm")
 fit.weibull <- fitdist(StepsDF$sl_, "weibull")
 fit.halfnorm <- fitdist(StepsDF$sl_, "halfnorm")
 fit.gamma <- fitdist(k$sl_, "gamma")
@@ -358,8 +358,7 @@ formula.global.2 <- case ~ -1 +
   f(ANIMAL_ID4,herb,values=1:9,model="iid",
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) +
   f(ANIMAL_ID5,wetlands,values=1:9,model="iid",
-    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) 
-
+    hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05))))
 
 r.inla.global.2 <- inla(formula.global.2, family ="Poisson", data=RndSteps5,
                         control.fixed = list(
@@ -372,6 +371,37 @@ Efxplot(list(r.inla.global.2))
 r.inla.global.2$summary.fixed
 ModelList <- list(control=r.inla.control, habitat=r.inla.habitat,human=r.inla.human, global=r.inla.global,global2=r.inla.global.2)
 ModelSelTable <- INLA.model.sel(ModelList)
+#preedict FOrest*RA
+#human day
+Day2 <- Day[,c(2,4,5,7,30,37,38)]
+seq <- rep(g$round, times=9)
+#g=41 obs
+x <- rep(g$`RndSteps5$x`, times=9)
+newobs <- data.frame(logsl2=0,log_sl_=0,RA=c(-0.5, 0, 2),forest=1,developed=0,herb=0,wetlands=0,shrub=0,cos_ta_=mean(RndSteps5$cos_ta_, na.rm=T),x=0,Stratum=424:450,
+                     case=as.integer(NA),TRI=0,ANIMAL_ID1=rep(1:9, each=3),ANIMAL_ID2=rep(1:9, each=3),ANIMAL_ID3=rep(1:9, each=3),ANIMAL_ID4=rep(1:9, each=3),ANIMAL_ID5=rep(1:9, each=3))
+newobs1 <- data.frame(logsl2=0,log_sl_=0,RA=c(-0.5, 0, 2),forest=0,developed=0,herb=0,wetlands=0,shrub=0,cos_ta_=mean(RndSteps5$cos_ta_, na.rm=T),x=0,Stratum=451:477,
+           case=as.integer(NA),TRI=0,ANIMAL_ID1=rep(1:9, each=3),ANIMAL_ID2=rep(1:9, each=3),ANIMAL_ID3=rep(1:9, each=3),ANIMAL_ID4=rep(1:9, each=3),ANIMAL_ID5=rep(1:9, each=3))
+newsobs <- bind_rows(newobs,newobs1)
+newsobs3 <- coredata(newsobs)[rep(seq(nrow(newsobs)),10),]
+RndSteps5short <- select(RndSteps5, c(14,15,17,20,22:27,41,45:50, 55))
+RndSteps5short$Stratum <- as.numeric(RndSteps5short$Stratum
+                                     )
+newDF <- bind_rows(RndSteps5short, newsobs3)
+newDF$Stratum <- as.factor(newDF$Stratum)
+whichrows <- which(is.na(newDF$case))
+whichrows
+predict.global.2 <- inla(formula.global.2, family ="Poisson", data=newDF,
+                        control.fixed = list(
+                          mean = mean.beta,
+                          prec = list(default = prec.beta)
+                        ),control.compute = list(cpo=TRUE,dic = TRUE, waic = TRUE)
+)
+
+predicted <- predict.global.2$summary.linear.predictor[37108:37647,]
+predicted2 <- predict.global.2$summary.fitted.values[37108:37161,]
+newobs4 <- bind_cols(newsobs3,predicted)
+newobs2$odds <- exp(newobs2$mean)
+Efxplot(predict.global.2)
 #################################################################
 #####################Model Selection#############################
 #################################################################

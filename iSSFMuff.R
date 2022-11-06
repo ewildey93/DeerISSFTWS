@@ -93,7 +93,7 @@ max <- "2022-10-09 11:00:00 MDT"
 RndSteps <- lapply(steps, function (x) random_steps(x, n_control = 20))
 
 #distributions fir using RndSteps4 df so theres one distribution instead of 10
-tadist <- lapply(RndSteps, function (x) fit_distr(x$ta_, "vonmises"))
+tadist <- fit_distr(StepsDF$ta_ , "vonmises")
 gamma <-  fit_distr(StepsDF$sl_, "gamma")
 table(RndSteps4$sl_ == 0)
 StepsDF <- bind_rows(steps, .id="column_label")
@@ -255,7 +255,7 @@ RndSteps5$RA <- scale(RndSteps5$RA)
 RndSteps5$x <- scale(RndSteps5$x)
 RndSteps5$log_sl_ <- scale(RndSteps5$log_sl_)
 saveRDS(RndSteps5, "./RndSteps5.rds")
-RndSteps5Gamma <- readRDS("./RndSteps5.rds")
+RndSteps5G <- readRDS("./RndSteps5.rds")
 ###########################################################################
 ####                           Modelling-iSSF         #####################
 ###########################################################################
@@ -263,19 +263,19 @@ RndSteps5Gamma <- readRDS("./RndSteps5.rds")
 mean.beta <- 0
 prec.beta <- 1e-4 
 
-RndSteps5$ANIMAL_ID <- as.numeric(as.factor(RndSteps5$column_label))
-RndSteps5$case <- as.integer(as.logical(RndSteps5$case_))
+RndSteps5G$ANIMAL_ID <- as.numeric(as.factor(RndSteps5$column_label))
+RndSteps5G$case <- as.integer(as.logical(RndSteps5$case_))
 saveRDS(RndSteps5, "./RndSteps5.rds")
 #To fit the model with random slopes in INLA, we need to generate new (but identical) variables of individual ID (ID cannot be used multiple times in the model formula):
-RndSteps5$ANIMAL_ID1 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID2 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID3 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID4 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID5 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID6 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID7 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID8 <- RndSteps5$ANIMAL_ID
-RndSteps5$ANIMAL_ID9 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID1 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID2 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID3 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID4 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID5 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID6 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID7 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID8 <- RndSteps5$ANIMAL_ID
+RndSteps5G$ANIMAL_ID9 <- RndSteps5$ANIMAL_ID
 saveRDS(RndSteps5, "./RndSteps5.rds")
 #Control model
 formula.control <- case ~ -1 + 
@@ -283,7 +283,7 @@ formula.control <- case ~ -1 +
                     sl_ + cos_ta_ + log_sl_ + log_sl_*cos_ta_ +
                     f(Stratum, model="iid", hyper=list(theta=list(initial=log(1e-4),fixed=T)))
 
-r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5,
+r.inla.control <- inla(formula.control, family ="Poisson", data=RndSteps5G,
                      control.fixed = list(
                        mean = mean.beta,
                        prec = list(default = prec.beta)
@@ -384,7 +384,7 @@ r.inla.global <- inla(formula.global, family ="Poisson", data=RndSteps5,
 Efxplot(list(r.inla.global))
 
 #global2
-formula.global.2 <- case ~ -1 +
+formula.global.2G <- case ~ -1 +
   #habitat
   developed+forest*RA+herb+wetlands+scale(TRI)+
   #human
@@ -404,7 +404,7 @@ formula.global.2 <- case ~ -1 +
     hyper=list(theta=list(initial=log(1),fixed=F,prior="pc.prec",param=c(3,0.05)))) 
 
 
-r.inla.global.2 <- inla(formula.global.2, family ="Poisson", data=RndSteps5,
+r.inla.global.2 <- inla(formula.global.2G, family ="Poisson", data=RndSteps5G,
                       control.fixed = list(
                         mean = mean.beta,
                         prec = list(default = prec.beta)

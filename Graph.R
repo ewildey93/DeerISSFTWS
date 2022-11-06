@@ -350,6 +350,7 @@ newobs$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)
 
 #########################################################################################
 #Stp Length Graph
+
 # Low elevation step-length distribution
 low_sl <-  update_lnorm(
   dist = sldist,
@@ -393,6 +394,10 @@ plot_sl$medium <- dlnorm(x = plot_sl$x,
 plot_sl$high <- dlnorm(x = plot_sl$x, 
                        meanlog=hi_sl$params$meanlog,
                        sdlog = hi_sl$params$sdlog)
+#Tentative
+plot_sl$tent <- dlnorm(x= plot_sl$x,
+                       meanlog=sldist$params$meanlog,
+                       sdlog=sldist$params$sdlog)
 
 # Pivot from wide to long data
 plot_sl <- plot_sl %>% 
@@ -402,8 +407,8 @@ plot_sl <- plot_sl %>%
 p1 <- ggplot(plot_sl, aes(x = x, y = value, color = factor(name))) +
   geom_line(size = 1) +
   scale_color_manual(name = "Rolling Avg",
-                     breaks = c("low", "medium", "high"),
-                     values = c("navyblue", "gray50", "firebrick")) +
+                     breaks = c("low", "medium", "high", "tent"),
+                     values = c("navyblue", "gray50", "firebrick", "yellow")) +
   xlab("Step Length (m)") +
   ylab("Probability Density") +
   theme_bw() 
@@ -419,48 +424,40 @@ med_sl <- update_lnorm(
 
 
 #ta day
+r.inla.global.2$summary.fixed
 # low turn-angle distribution
-low_ta <- update_vonmises(
-  dist = m4$ta_,
-  beta_cos_ta = m4$model$coefficients["cos_ta_"] +
-    -2 * m4$model$coefficients["cos_ta_:elevation_start"])
+upd_ta <- update_vonmises(
+  dist = tadist,
+  beta_cos_ta = -0.08927253)
 
-# med turn-angle distribution
-med_ta <- update_vonmises(
-  dist = m4$ta_,
-  beta_cos_ta = m4$model$coefficients["cos_ta_"] +
-    1 * m4$model$coefficients["cos_ta_:elevation_start"])
+old_ta
 
-# hi turn-angle distribution
-hi_ta <- update_vonmises(
-  dist = m4$ta_,
-  beta_cos_ta = m4$model$coefficients["cos_ta_"] +
-    2 * m4$model$coefficients["cos_ta_:elevation_start"])
 
 #########################GAMMA#############################################
 # Low elevation step-length distribution
+r.inla.global.2$summary.fixed
 low_sl <- update_gamma(
   dist = gamma,
-  beta_sl = 0.01801359 +
-    -0.5 * 0.02914068,
-  beta_log_sl = 0.02137780 +
-    -0.5 * -0.09037506)
+  beta_sl = 0.01963323 +
+    -0.5 * 0.02960075,
+  beta_log_sl = 0.02045540 +
+    -0.5 * -0.09126362)
 
 # Medium elevation step-length distribution
 med_sl <- update_gamma(
   dist = gamma,
-  beta_sl = 0.01801359 +
-    1 * 0.02914068,
-  beta_log_sl = 0.02137780 +
-    1 * -0.09037506)
+  beta_sl = 0.01963323 +
+    0 * 0.02960075,
+  beta_log_sl = 0.02045540 +
+    0 * -0.09126362)
 
 # Wet step-length distribution
 hi_sl <- update_gamma(
   dist = gamma,
-  beta_sl = 0.01801359 +
-    3 * 0.02914068,
-  beta_log_sl = 0.02137780 +
-    3 * -0.09037506)
+  beta_sl = 0.01963323 +
+    2 * 0.02960075,
+  beta_log_sl = 0.02045540 +
+    2 * -0.09126362)
 plot_sl <- data.frame(x = rep(NA, 100))
 
 # x-axis is sequence of possible step lengths
@@ -494,3 +491,195 @@ p1 <- ggplot(plot_sl, aes(x = x, y = value, color = factor(name))) +
   ylab("Probability Density") +
   theme_bw() 
 p1
+################################################################################
+# DayStp Length Graph
+r.inla.global.day$summary.fixed
+# Low elevation step-length distribution
+low_sl <-  update_lnorm(
+  dist = newday_sl,
+  beta_log_sl_sq = 
+    -0.5 * -0.097089574,
+  beta_log_sl =  
+    -0.5 * -0.404839045)
+
+# Medium elevation step-length distribution
+med_sl <- update_lnorm(
+  dist = newday_sl,
+  beta_log_sl_sq = 
+    0 * -0.097089574,
+  beta_log_sl =  
+    0 * -0.404839045)
+
+# Wet step-length distribution
+hi_sl <- update_lnorm(
+  dist = newday_sl,
+  beta_log_sl_sq = 
+    2 * -0.097089574,
+  beta_log_sl =  
+    2 * -0.404839045)
+
+newday_sl <- update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = 0.032853657,
+  beta_log_sl =  0.286861542)
+
+#data.frame for plotting
+plot_slday <- data.frame(x = rep(NA, 100))
+
+# x-axis is sequence of possible step lengths
+plot_slday$x <- seq(from = 0, to = 2000, length.out = 100)
+
+# y-axis is the probability density under the given gamma distribution
+# Forest
+plot_slday$low<- dlnorm(x = plot_slday$x, 
+                     meanlog=low_sl$params$meanlog,
+                     sdlog = low_sl$params$sdlog)
+# Grass
+plot_slday$medium <- dlnorm(x = plot_slday$x, 
+                         meanlog=med_sl$params$meanlog,
+                         sdlog = med_sl$params$sdlog)
+# Wet
+plot_slday$high <- dlnorm(x = plot_slday$x, 
+                       meanlog=hi_sl$params$meanlog,
+                       sdlog = hi_sl$params$sdlog)
+#Tentative
+plot_slday$tent <- dlnorm(x= plot_slday$x,
+                       meanlog=newday_sl$params$meanlog,
+                       sdlog=newday_sl$params$sdlog)
+
+# Pivot from wide to long data
+plot_slday <- plot_slday %>% 
+  pivot_longer(cols = -x)
+
+# Plot
+p2 <- ggplot(plot_slday, aes(x = x, y = value, color = factor(name))) +
+  geom_line(size = 1) +
+  scale_color_manual(name = "Rolling Avg",
+                     breaks = c("low", "medium", "high"),
+                     values = cbbPalette) +
+  xlab("Step Length (m)") +
+  ylab("Probability Density") +
+  ggtitle('Updated Day Step Length Distributions') + theme_bw ()+
+  theme(plot.title = element_text(hjust = 0.5))
+p2
+
+##################################Night Step Length Dist#######################
+# NightStp Length Graph
+r.inla.global.night$summary.fixed
+# Low elevation step-length distribution
+low_sl <-  update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = -0.04042133 +
+    -0.5 * 0.16894142,
+  beta_log_sl = 0.78518500 +
+    -0.5 * 1.36396113)
+
+# Medium elevation step-length distribution
+med_sl <- update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = -0.04042133 +
+    0 * 0.16894142,
+  beta_log_sl = 0.78518500 +
+  0 * 1.36396113)
+
+# Wet step-length distribution
+hi_sl <- update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = -0.04042133 +
+    0.5 * 0.16894142,
+  beta_log_sl = 0.78518500 +
+  0.5 * 1.36396113)
+
+newday_sl <- update_lnorm(
+  dist = sldist,
+  beta_log_sl_sq = 0.032853657,
+  beta_log_sl =  0.286861542)
+
+#data.frame for plotting
+plot_slnight <- data.frame(x = rep(NA, 100))
+
+# x-axis is sequence of possible step lengths
+plot_slnight$x <- seq(from = 0, to = 2000, length.out = 100)
+
+# y-axis is the probability density under the given gamma distribution
+# Forest
+plot_slnight$low<- dlnorm(x = plot_slnight$x, 
+                        meanlog=low_sl$params$meanlog,
+                        sdlog = low_sl$params$sdlog)
+# Grass
+plot_slnight$medium <- dlnorm(x = plot_slnight$x, 
+                            meanlog=med_sl$params$meanlog,
+                            sdlog = med_sl$params$sdlog)
+# Wet
+plot_slnight$high <- dlnorm(x = plot_slnight$x, 
+                          meanlog=hi_sl$params$meanlog,
+                          sdlog = hi_sl$params$sdlog)
+#Tentative
+plot_slday$tent <- dlnorm(x= plot_slday$x,
+                          meanlog=newday_sl$params$meanlog,
+                          sdlog=newday_sl$params$sdlog)
+
+# Pivot from wide to long data
+plot_slnight <- plot_slnight %>% 
+  pivot_longer(cols = -x)
+
+# Plot
+p2 <- ggplot(plot_slnight, aes(x = x, y = value, color = factor(name))) +
+  geom_line(size = 1) +
+  scale_color_manual(name = "Rolling Avg",
+                     breaks = c("low", "medium", "high"),
+                     values = cbbPalette) +
+  xlab("Step Length (m)") +
+  ylab("Probability Density") +
+  ggtitle('Updated Night Step Length Distributions') + theme_bw ()+
+  theme(plot.title = element_text(hjust = 0.5))
+p2
+################################################################################
+str(newobs2)
+newobs2 <- summarySE(newobs2, measurevar="mean", groupvars=c("forest", "RA"))
+newobs2[1:3,5:7] <- c(0.2528021,0.2528021,0.2528021,0.02664768,0.02664768, 0.02664768,0.05294837,0.05294837, 0.05294837)
+ggplot (newobs2, aes(x=RA, y=mean, color=factor(forest))) + 
+  geom_line(position=position_dodge(0.1)) +
+  geom_point(position=position_dodge(0.1)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  ylab("Mean Predicted Betas") +
+  xlab("Rolling Average Trail Activity") +
+  theme(panel.background = element_blank(),plot.title = element_text(hjust = 0.5))+
+  scale_color_discrete(name = "Habitat", labels = c("Shrub", "Forest")) +
+  ggtitle("Change in Habitat Selection with Increasing Trail Activity")
+######################scrap#########################################################
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+  library(plyr)
+  
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)
+  }
+  
+  # This does the summary. For each group's data frame, return a vector with
+  # N, mean, and sd
+  datac <- ddply(data, groupvars, .drop=.drop,
+                 .fun = function(xx, col) {
+                   c(N    = length2(xx[[col]], na.rm=na.rm),
+                     mean = mean   (xx[[col]], na.rm=na.rm),
+                     sd   = sd     (xx[[col]], na.rm=na.rm)
+                   )
+                 },
+                 measurevar
+  )
+  
+  # Rename the "mean" column    
+  datac <- rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  
+  return(datac)
+}
