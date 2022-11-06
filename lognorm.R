@@ -6,11 +6,13 @@ StepsDF <- StepsDF %>%
   mutate(sl_ = replace(sl_, sl_==0, 1))
 par(mfrow=c(1,2))
 descdist(StepsDF$sl_, discrete = FALSE)
-descdist(k$sl_, discrete = FALSE)
+descdist(q, discrete = FALSE)
+q <- as.numeric(RndSteps5$sl_ * (z$'scaled:scale') + z$'scaled:center')
+z <- attributes(RndSteps5$sl_)
 
-fit.gamma <- fitdist(StepsDF$sl_, "gamma")
+fit.gamma <- fitdist(q, "gamma")
 fit.exp <- fitdist(StepsDF$sl_, "exp")
-fit.lognorm <- fitdist(StepsDF$sl_, "lnorm")
+fit.lognorm <- fitdist(q, "lnorm")
 fit.weibull <- fitdist(StepsDF$sl_, "weibull")
 fit.halfnorm <- fitdist(StepsDF$sl_, "halfnorm")
 fit.gamma <- fitdist(k$sl_, "gamma")
@@ -172,7 +174,7 @@ RndSteps4 <- RndSteps4[-(9787:10122),]
 RndSteps4 <- RndSteps4 %>% 
   mutate(sl_ = replace(sl_, sl_==0, 1))
 saveRDS(RndSteps4, "./RndSteps4lognorm.rds")
-RndSteps4 <- readRDS("./RndSteps4.rds")
+RndSteps4what <- readRDS("./RndSteps4lognorm.rds")
 hist(RndSteps4$log_sl_)
 hist(RndSteps4$sl_)
 range(RndSteps4$Total)
@@ -230,7 +232,8 @@ RndSteps5$ANIMAL_ID7 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID8 <- RndSteps5$ANIMAL_ID
 RndSteps5$ANIMAL_ID9 <- RndSteps5$ANIMAL_ID
 RndSteps5$logsl2 <- RndSteps5$log_sl_^2
-saveRDS(RndSteps5, "./RndSteps5lognorm.rds")
+RndSteps5 <- RndSteps5 %>% drop_na(RA)
+saveRDS(RndSteps5, "./RndSteps5lognorm2.rds")
 #Control model
 formula.control <- case ~ -1 + 
   #movement kernel

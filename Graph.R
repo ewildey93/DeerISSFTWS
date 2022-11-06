@@ -231,7 +231,7 @@ ggplot(GraphGlobal,
                 width = 0,show.legend=F,
                 position = position_dodge(w = 0.5)) +
   geom_point(position = position_dodge(w = 0.5), size = 1) +
-  scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Step Length x Rolling Avg' ,'Rolling Avg x Forest','Cosine Turning Angle','Log Step Length','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
+  #scale_x_discrete(labels = c("Log Step Length x Rolling Avg",'Step Length x Rolling Avg' ,'Rolling Avg x Forest','Cosine Turning Angle','Log Step Length','Step Length','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
   ggtitle("Posterior Beta Estimates for Global Model") +
   theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
 
@@ -253,7 +253,7 @@ ggplot(GraphGlobalLN,
                 width = 0,show.legend=F,
                 position = position_dodge(w = 0.5)) +
   geom_point(position = position_dodge(w = 0.5), size = 1) +
-  scale_x_discrete(labels = c("Log Step Length x Turn Angle",'Log Step Length x Rolling Avg' ,'Log Step Length ^2 x Rolling Avg','Forest x Rolling Avg','Cosine Turning Angle','Log Step Length','Log Step Length ^2','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
+  #scale_x_discrete(labels = c("Log Step Length x Turn Angle",'Log Step Length x Rolling Avg' ,'Log Step Length ^2 x Rolling Avg','Forest x Rolling Avg','Cosine Turning Angle','Log Step Length','Log Step Length ^2','Distance to Trail','TRI','Wetland','Herbaceous','Forest','Developed')) +
   ggtitle("Posterior Beta Estimates for Global Model") +
   theme(plot.title = element_text(hjust = 0.5),axis.text=element_text(size=12),panel.background = element_blank())
 
@@ -261,7 +261,7 @@ ggplot(GraphGlobalLN,
 #Day and Night
 DayNightList <- list(Day=r.inla.global.day, Night=r.inla.global.night)
 DayNightGraph <- Efxplot2(DayNightList)
-DayNightGraph <- DayNightGraph[c(-8,-20),]
+DayNightGraph <- DayNightGraph[c(-8,-21),]
 position <- ifelse(length(unique(DayNightGraph$Model))  ==  1, "none", "right")
 
 ggplot(DayNightGraph,
@@ -353,26 +353,26 @@ newobs$wetlands <- ifelse(RndSteps4$lc %in% c(90,95), 1, 0)
 # Low elevation step-length distribution
 low_sl <-  update_lnorm(
   dist = sldist,
-  beta_log_sl_sq = -0.037703838 +
-    -2 * -0.002481102,
-  beta_log_sl =  -0.009971792 +
-    -2 * 0.081020638)
+  beta_log_sl_sq = -0.05880752 +
+    -2 * 0.01260644,
+  beta_log_sl =  -0.03374903 +
+    -2 * -0.03606240)
 
 # Medium elevation step-length distribution
 med_sl <- update_lnorm(
   dist = sldist,
-  beta_log_sl_sq = -0.037703838 +
-    0 * -0.002481102,
-  beta_log_sl =  -0.009971792 +
-    0 * 0.081020638)
+  beta_log_sl_sq = -0.05880752 +
+    0 * 0.01260644,
+  beta_log_sl =  -0.03374903 +
+    0 * -0.03606240)
 
 # Wet step-length distribution
 hi_sl <- update_lnorm(
   dist = sldist,
-  beta_log_sl_sq = -0.037703838 +
-    2 * -0.002481102,
-  beta_log_sl =  -0.009971792 +
-    22 * 0.081020638)
+  beta_log_sl_sq = -0.05880752 +
+    4 * 0.01260644,
+  beta_log_sl =  -0.03374903 +
+    4 * -0.03606240)
 
 #data.frame for plotting
 plot_sl <- data.frame(x = rep(NA, 100))
@@ -412,10 +412,10 @@ p1
 #old coefs why are they different
 med_sl <- update_lnorm(
   dist = sldist,
-  beta_log_sl_sq = 0.008821132 +
-    0 * 0.046916729,
-  beta_log_sl =  -0.038914849 +
-    0 * 0.513143550)
+  beta_log_sl_sq = 0.01282265 +
+    0 * 0.06194353,
+  beta_log_sl =  0.05695070 +
+    0 * -0.04531242)
 
 
 #ta day
